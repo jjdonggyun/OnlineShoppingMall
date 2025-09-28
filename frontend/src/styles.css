@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --maxw: 1200px; }
+.container-max { max-width: var(--maxw); margin: 0 auto; padding: 0 1rem; }
+.skeleton { @apply animate-pulse bg-gray-200 rounded; }

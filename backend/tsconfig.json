@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",        // ← 대문자 N 권장
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node"]                  // ← Node 내장 타입 명시
+    // 필요시: "typeRoots": ["./node_modules/@types"]
+  },
+  "include": ["src"]
+}
