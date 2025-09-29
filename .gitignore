@@ -9,3 +9,4 @@ dist/
 
 # environment
 .env
+backend/uploads/

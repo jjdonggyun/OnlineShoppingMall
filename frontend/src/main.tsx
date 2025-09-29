@@ -6,6 +6,7 @@ import './styles.css'
 import App from './pages/App'
 import ProductDetail from './pages/ProductDetail'
 import Login from './pages/Login'
+import ProductNew from './pages/ProductNew'
 
 // ★ 추가
 import Register from './pages/Register'
@@ -15,11 +16,11 @@ const qc = new QueryClient()
 const router = createBrowserRouter([
   { path: '/', element: <App /> },
   { path: '/login', element: <Login /> },
-  // ★ 추가
   { path: '/register', element: <Register /> },
   { path: '/verify-email', element: <VerifyEmail /> },
 
-  { path: '/products/:id', element: <ProductDetail /> }
+  { path: '/products/:id', element: <ProductDetail /> },
+  { path: '/admin/products/new', element: <ProductNew /> }
 ])
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

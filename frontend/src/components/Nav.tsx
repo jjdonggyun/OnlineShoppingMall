@@ -13,13 +13,24 @@ export default function Nav() {
         <Link to="/" className="text-xl font-bold tracking-tight">
           <span className="text-brand">ATTRI</span><span className="text-brand-accent">LOOK</span>
         </Link>
+
         <nav className="hidden md:flex items-center gap-6 text-sm text-gray-700">
           <a href="#" className="hover:text-black">NEW</a>
           <a href="#" className="hover:text-black">BEST</a>
           <a href="#" className="hover:text-black">DRESS</a>
           <a href="#" className="hover:text-black">ACC</a>
         </nav>
+
         <div className="flex items-center gap-4 text-sm">
+          {user?.role === 'ADMIN' && (
+            <Link
+              to="/admin/products/new"
+              className="px-3 py-1.5 rounded-lg border hover:bg-gray-50"
+            >
+              상품 등록
+            </Link>
+          )}
+
           {user ? (
             <>
               <span>{user.email} {user.role==='ADMIN' && '(Admin)'}</span>
@@ -27,8 +38,8 @@ export default function Nav() {
             </>
           ) : (
             <>
-            <Link to="/login">로그인</Link>
-            <Link to="/register" className="font-medium">회원가입</Link> {/* ← 추가 */}
+              <Link to="/login">로그인</Link>
+              <Link to="/register" className="font-medium">회원가입</Link>
             </>
           )}
           <button>장바구니</button>
