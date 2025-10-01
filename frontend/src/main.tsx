@@ -1,29 +1,57 @@
+// main.tsx (또는 index.tsx)
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import './styles.css'
+
 import App from './pages/App'
 import ProductDetail from './pages/ProductDetail'
 import Login from './pages/Login'
 import ProductNew from './pages/ProductNew'
-
-// ★ 추가
 import Register from './pages/Register'
 import VerifyEmail from './pages/VerifyEmail'
+import CartPage from './pages/Cart'
 
-const qc = new QueryClient()
+// ★ 게스트 카트 로컬스토리지 → 메모리 로드용
+import { useGuestCart } from './stores/useGuestCart'
+import AdminSoldOut from './pages/AdminSoldOut'
+import ProductEdit from './pages/ProductEdit'
+
+const qc = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+})
+
 const router = createBrowserRouter([
   { path: '/', element: <App /> },
   { path: '/login', element: <Login /> },
   { path: '/register', element: <Register /> },
   { path: '/verify-email', element: <VerifyEmail /> },
 
+  // 상품
   { path: '/products/:id', element: <ProductDetail /> },
-  { path: '/admin/products/new', element: <ProductNew /> }
+  { path: '/admin/products/new', element: <ProductNew /> },
+
+  // 장바구니
+  { path: '/cart', element: <CartPage /> },
+  { path: '/admin/products/soldout', element: <AdminSoldOut /> },
+  { path: '/admin/products/:id/edit', element: <ProductEdit /> },
 ])
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+// ★★★ 렌더 전에 게스트 카트 1회 로드 (Hook이 아님: getState()는 안전)
+useGuestCart.getState().load()
+
+// ★ createRoot를 '한 번만' 호출하고 render
+const rootEl = document.getElementById('root')!
+const root = ReactDOM.createRoot(rootEl)
+
+root.render(
   <React.StrictMode>
     <QueryClientProvider client={qc}>
       <RouterProvider router={router} />

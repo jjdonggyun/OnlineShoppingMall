@@ -8,6 +8,7 @@ import { connectDB } from './db'
 import authRoutes from './routes/auth'
 import productRoutes from './routes/products'
 import Product from './models/Product'
+import cartRouter from './routes/cart'
 import path from 'path'
 
 const app = express()
@@ -30,6 +31,9 @@ app.get('/api/health', (_req,res)=>res.json({ok:true}))
 app.use('/api/auth', authRoutes)
 app.use('/api/products', productRoutes)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
+
+app.use('/api/cart', cartRouter)
+
 const port = process.env.PORT || 4000
 const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/shopmall'
 
