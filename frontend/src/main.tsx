@@ -18,6 +18,10 @@ import CartPage from './pages/Cart'
 import { useGuestCart } from './stores/useGuestCart'
 import AdminSoldOut from './pages/AdminSoldOut'
 import ProductEdit from './pages/ProductEdit'
+import AdminBannerList from './pages/AdminBannerList'
+import AdminBannerForm from './pages/AdminBannerForm'
+import MyPage from './pages/MyPage'
+import ProductList from './pages/ProductList'
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -42,6 +46,12 @@ const router = createBrowserRouter([
   { path: '/cart', element: <CartPage /> },
   { path: '/admin/products/soldout', element: <AdminSoldOut /> },
   { path: '/admin/products/:id/edit', element: <ProductEdit /> },
+
+  { path: '/admin/banners', element: <AdminBannerList /> },
+  { path: '/admin/banners/new', element: <AdminBannerForm /> },
+  { path: '/admin/banners/:id/edit', element: <AdminBannerForm /> },
+  { path: '/me', element: <MyPage /> },
+  { path: '/products', element: <ProductList /> },
 ])
 
 // ★★★ 렌더 전에 게스트 카트 1회 로드 (Hook이 아님: getState()는 안전)

@@ -1,3 +1,4 @@
+// backend/index.ts
 import 'dotenv/config'
 import express from 'express'
 import helmet from 'helmet'
@@ -10,6 +11,8 @@ import productRoutes from './routes/products'
 import Product from './models/Product'
 import cartRouter from './routes/cart'
 import path from 'path'
+import bannersRouter from './routes/banners'
+import collectionsRouter from './routes/collections'
 
 const app = express()
 
@@ -33,23 +36,12 @@ app.use('/api/products', productRoutes)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
 
 app.use('/api/cart', cartRouter)
+app.use('/api/banners', bannersRouter)
+app.use('/api/collections', collectionsRouter)
 
 const port = process.env.PORT || 4000
 const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/shopmall'
 
 connectDB(uri).then(async () => {
-  // // seed some products if empty
-  // const count = await Product.countDocuments()
-  // if (count === 0) {
-  //   await Product.insertMany(
-  //     Array.from({length: 12}).map((_,i)=> ({
-  //       name: `소프트 니트 가디건 ${i+1}`,
-  //       price: 39000 + i*1000,
-  //       image: `https://picsum.photos/seed/fashion${i}/600/800`,
-  //       badge: i % 3 === 0 ? 'NEW' : (i % 5 === 0 ? 'BEST' : undefined)
-  //     }))
-  //   )
-  //   console.log('[seed] sample products inserted')
-  // }
   app.listen(port, () => console.log(`API on http://localhost:${port}`))
 })

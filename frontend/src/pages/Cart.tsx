@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCart } from '../stores/useCart'
 import { useCartSmart } from '../stores/useCartSmart'
+import Nav from '../components/Nav'
 
 type PMap = Record<string, { name: string; price: number; images: string[] }>
 
@@ -66,57 +67,60 @@ export default function CartPage() {
   }
 
   return (
-    <div className="container-max py-10">
-      <h1 className="text-2xl font-bold mb-6">장바구니</h1>
+    <div className="min-h-screen bg-white text-[#222]">
+        <Nav />
+        <div className="container-max py-10">
+        <h1 className="text-2xl font-bold mb-6">장바구니</h1>
 
-      {rows.length === 0 ? (
-        <div className="text-gray-600">
-          장바구니가 비었습니다. <Link to="/" className="underline">상품 보러가기</Link>
-        </div>
-      ) : (
-        <>
-          <ul className="divide-y">
-            {rows.map(it => (
-              <li key={it.productId} className="py-4 flex items-center gap-4">
-                <img
-                  src={it.images[0] || 'https://via.placeholder.com/80x80?text=No+Image'}
-                  alt=""
-                  className="w-20 h-20 object-cover rounded"
-                />
-                <div className="flex-1">
-                  <div className="font-medium">{it.name}</div>
-                  <div className="text-sm text-gray-600">{it.price.toLocaleString()}원</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button className="px-2 border rounded"
-                          onClick={() => smart.setQty(it.productId, Math.max(1, it.qty - 1))}>-</button>
-                  <span className="w-8 text-center">{it.qty}</span>
-                  <button className="px-2 border rounded"
-                          onClick={() => smart.setQty(it.productId, it.qty + 1)}>+</button>
-                </div>
-                <div className="w-24 text-right">{it.line.toLocaleString()}원</div>
-                <button className="ml-4 text-sm text-red-600"
-                        onClick={() => smart.remove(it.productId)}>삭제</button>
-              </li>
-            ))}
-          </ul>
-
-          <div className="mt-6 flex items-center justify-between">
-            {!smart.isLoggedIn && (
-              <div className="text-sm text-gray-600">
-                로그인하면 장바구니가 계정에 저장돼요. <Link to="/login" className="underline">로그인</Link>
-              </div>
-            )}
-            <div className="text-right ml-auto">
-              <div>총 수량: <b>{totalQty}</b>개</div>
-              <div className="text-xl font-semibold">결제금액: {totalPrice.toLocaleString()}원</div>
-              <button className="mt-3 px-6 py-3 rounded-xl bg-black text-white" disabled={!smart.isLoggedIn}>
-                {smart.isLoggedIn ? '결제하기(추가 구현)' : '로그인 후 결제'}
-              </button>
+        {rows.length === 0 ? (
+            <div className="text-gray-600">
+            장바구니가 비었습니다. <Link to="/" className="underline">상품 보러가기</Link>
             </div>
-          </div>
-        </>
-      )}
+        ) : (
+            <>
+            <ul className="divide-y">
+                {rows.map(it => (
+                <li key={it.productId} className="py-4 flex items-center gap-4">
+                    <img
+                    src={it.images[0] || 'https://via.placeholder.com/80x80?text=No+Image'}
+                    alt=""
+                    className="w-20 h-20 object-cover rounded"
+                    />
+                    <div className="flex-1">
+                    <div className="font-medium">{it.name}</div>
+                    <div className="text-sm text-gray-600">{it.price.toLocaleString()}원</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                    <button className="px-2 border rounded"
+                            onClick={() => smart.setQty(it.productId, Math.max(1, it.qty - 1))}>-</button>
+                    <span className="w-8 text-center">{it.qty}</span>
+                    <button className="px-2 border rounded"
+                            onClick={() => smart.setQty(it.productId, it.qty + 1)}>+</button>
+                    </div>
+                    <div className="w-24 text-right">{it.line.toLocaleString()}원</div>
+                    <button className="ml-4 text-sm text-red-600"
+                            onClick={() => smart.remove(it.productId)}>삭제</button>
+                </li>
+                ))}
+            </ul>
+
+            <div className="mt-6 flex items-center justify-between">
+                {!smart.isLoggedIn && (
+                <div className="text-sm text-gray-600">
+                    로그인하면 장바구니가 계정에 저장돼요. <Link to="/login" className="underline">로그인</Link>
+                </div>
+                )}
+                <div className="text-right ml-auto">
+                <div>총 수량: <b>{totalQty}</b>개</div>
+                <div className="text-xl font-semibold">결제금액: {totalPrice.toLocaleString()}원</div>
+                <button className="mt-3 px-6 py-3 rounded-xl bg-black text-white" disabled={!smart.isLoggedIn}>
+                    {smart.isLoggedIn ? '결제하기(추가 구현)' : '로그인 후 결제'}
+                </button>
+                </div>
+            </div>
+            </>
+        )}
+        </div>
     </div>
   )
 }

@@ -1,3 +1,4 @@
+// ProductDetail.tsx
 import { useParams, Link, useNavigate } from 'react-router-dom' // URL 파라미터/페이지 이동 (Mendix: Page parameter + Show page)
 import { useQuery, useQueryClient } from '@tanstack/react-query' // 서버 호출 + 캐시 (Mendix: Call REST + 클라이언트 캐시 개념)
 import type { Product } from '../components/ProductCard'
@@ -5,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../stores/auth'                         // 전역 인증 상태 (Mendix: Session/Account 컨텍스트)
 import { useCart } from '../stores/useCart'
 import { useCartSmart } from '../stores/useCartSmart'
+import Nav from '../components/Nav'
 
 
 export default function ProductDetail() {
@@ -15,11 +17,11 @@ export default function ProductDetail() {
 
   // 상품 상세 로드 (Mendix: Call REST → Data view datasource)
   const { data } = useQuery({
-    queryKey: ['product', id],                                   // 캐시 키: 상품 개별
+    queryKey: ['product', id],
     queryFn: async () => {
-      const r = await fetch(`/api/products/${id}`)               // REST: GET /api/products/:id
-      if (!r.ok) throw new Error('NOT_FOUND')                    // 404/에러 처리
-      return r.json() as Promise<Product & { description?: string }>
+      const r = await fetch(`/api/products/${id}`)
+      if (!r.ok) throw new Error('NOT_FOUND')
+      return r.json() as Promise<Product & { description?: string, categories?: string[] }>
     }
   })
 
@@ -74,7 +76,8 @@ export default function ProductDetail() {
   }
 
   return (
-    <div>
+    <div className="min-h-screen bg-white text-[#222]">
+      <Nav />
       {/* 상단 바: 뒤로가기 + 관리자 삭제 버튼 */}
       <div className="container-max py-4">
         <Link to="/" className="text-sm text-gray-600">← 목록으로</Link>
@@ -174,12 +177,20 @@ export default function ProductDetail() {
         {/* 정보 영역 */}
         <div>
           <h1 className="text-2xl font-bold">{data.name}</h1>
+          {(data.categories?.length ?? 0) > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {data.categories!.map((c, i) => (
+                <span key={i} className="text-xs px-2 py-0.5 rounded-full border">
+                  {c}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="text-xl font-semibold mt-2">
             {data.price.toLocaleString()}원
           </div>
 
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            {data.name}
             {data.status === 'SOLD_OUT' && (
               <span className="text-xs px-2 py-1 rounded bg-gray-900 text-white">품절</span>
             )}

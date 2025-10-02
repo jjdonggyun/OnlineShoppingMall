@@ -1,50 +1,71 @@
-import { useEffect, useMemo, useRef, useState } from 'react' // 상태/이펙트 관리 (Mendix의 Nanoflow + Attribute listener와 유사)
-import { Link } from 'react-router-dom'  // 클릭 시 상세 페이지 이동
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 
-// 상품 데이터 타입 정의 (Mendix의 Entity와 유사)
 export type Product = {
   id: string
   name: string
   price: number
-  images: string[]   // 여러 장의 상품 이미지
-  badge?: string     // NEW, BEST 같은 라벨
-  status?: 'ACTIVE' | 'SOLD_OUT'
+  images: string[]
+  badge?: string
+  status: 'ACTIVE' | 'SOLD_OUT'
+  categories?: string[]
 }
 
-export default function ProductCard({ p }: { p: Product }) {
-  // 이미지 배열이 없으면 기본 placeholder 이미지 사용
+export default function ProductCard({
+  p,
+  onRemove,
+}: {
+  p: Product
+  onRemove?: (id: string) => void   // ★ 추가: 제거 콜백
+}) {
   const imgs = p.images?.length ? p.images : ['https://via.placeholder.com/600x800?text=No+Image']
-  
-  const [idx, setIdx] = useState(0)         // 현재 보여줄 이미지 인덱스
-  const timer = useRef<number | null>(null) // 이미지 자동 전환용 타이머 저장소
+  const [idx, setIdx] = useState(0)
+  const timer = useRef<number | null>(null)
 
-  // 2초마다 다음 이미지로 변경 (Mendix의 "Timer widget" 같은 동작)
   useEffect(() => {
-    if (imgs.length <= 1) return             // 이미지가 1장 이하일 경우 자동 전환 안함
+    if (imgs.length <= 1) return
     timer.current = window.setInterval(() => {
-      setIdx(i => (i + 1) % imgs.length)     // 다음 이미지로 순환
+      setIdx(i => (i + 1) % imgs.length)
     }, 2000)
-    return () => { if (timer.current) window.clearInterval(timer.current) }
+    return () => {
+      if (timer.current) window.clearInterval(timer.current)
+    }
   }, [imgs.length])
 
-  // 현재 표시할 이미지 계산 (메모이제이션: 성능 최적화)
   const display = useMemo(() => imgs[idx], [imgs, idx])
 
   return (
-    <Link to={`/products/${p.id}`} className="block">
-      {/* 이미지 영역 */}
-      <div className="aspect-[3/4] overflow-hidden rounded-xl bg-gray-100">
-        <img src={display} alt={p.name} className="w-full h-full object-cover" />
-      </div>
-      
-      {/* 상품명/가격 영역 */}
-      <div className="mt-2 text-sm">
-        <div className="font-medium">
-          {p.name} 
-          {p.badge && <span className="ml-1 text-rose-500">[{p.badge}]</span>}
+    <div className="relative group">
+      <Link to={`/products/${p.id}`} className="block">
+        {/* 이미지 영역 */}
+        <div className="aspect-[3/4] overflow-hidden rounded-xl bg-gray-100">
+          <img src={display} alt={p.name} className="w-full h-full object-cover" />
         </div>
-        <div className="text-gray-600">{p.price.toLocaleString()}원</div>
-      </div>
-    </Link>
+
+        {/* 상품명/가격 영역 */}
+        <div className="mt-2 text-sm">
+          <div className="font-medium">
+            {p.name}
+            {p.badge && <span className="ml-1 text-rose-500">[{p.badge}]</span>}
+          </div>
+          <div className="text-gray-600">{p.price.toLocaleString()}원</div>
+        </div>
+      </Link>
+
+      {/* ★ 제거 버튼 (관리자 전용) */}
+      {onRemove && (
+        <button
+          onClick={(e) => {
+            e.preventDefault()    // 링크 이동 막기
+            e.stopPropagation()
+            onRemove(p.id)
+          }}
+          className="absolute top-2 right-2 text-xs px-2 py-1 rounded bg-white/90 border shadow-sm 
+                     hover:bg-red-100 text-red-600 hidden group-hover:block"
+        >
+          제거
+        </button>
+      )}
+    </div>
   )
 }
