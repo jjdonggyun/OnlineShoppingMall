@@ -13,6 +13,7 @@ import cartRouter from './routes/cart'
 import path from 'path'
 import bannersRouter from './routes/banners'
 import collectionsRouter from './routes/collections'
+import hashtags from './routes/hashtags'
 
 const app = express()
 
@@ -38,6 +39,7 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
 app.use('/api/cart', cartRouter)
 app.use('/api/banners', bannersRouter)
 app.use('/api/collections', collectionsRouter)
+app.use('/api/hashtags', hashtags)
 
 const port = process.env.PORT || 4000
 const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/shopmall'

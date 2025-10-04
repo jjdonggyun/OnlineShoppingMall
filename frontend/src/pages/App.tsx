@@ -1,12 +1,21 @@
-// App.tsx
 import Nav from '../components/Nav'
 import Hero from '../components/Hero'
-import ProductCard, { Product } from '../components/ProductCard'
+import ProductCard from '../components/ProductCard'
+import type { Product } from '../types/product'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../stores/auth'
 import SelectProductModal from '../components/SelectProductModal'
+import { useProducts } from '../hooks/useProducts'
+
+type Hashtag = {
+  id: string
+  label: string
+  emoji?: string | null
+  type: 'CATEGORY'|'TAG'|'CHANNEL'
+  value: string
+}
 
 function useMediaQuery(q: string) {
   const [ok, setOk] = useState(() =>
@@ -22,6 +31,7 @@ function useMediaQuery(q: string) {
   return ok
 }
 
+// 기존 콜렉션 섹션 그대로
 function useCollection(name: 'RECOMMENDED' | 'SEASONAL' | 'BEST') {
   return useQuery({
     queryKey: ['collection', name],
@@ -35,7 +45,7 @@ function useCollection(name: 'RECOMMENDED' | 'SEASONAL' | 'BEST') {
 
 function Section({
   title,
-  eyebrow,  // ← 추가: 작은 상단 서브타이틀
+  eyebrow,
   name,
   onAdd,
 }: {
@@ -63,7 +73,6 @@ function Section({
   return (
     <section className="mt-24">
       <div className="mx-auto max-w-[1520px] px-3 sm:px-4">
-        {/* 중앙 정렬 헤더 */}
         <div className="mb-6">
           <div className="text-center">
             {eyebrow && (
@@ -76,7 +85,6 @@ function Section({
             </h3>
           </div>
 
-          {/* ADMIN 버튼은 제목 아래 우측 정렬 */}
           {user?.role === 'ADMIN' && (
             <div className="mt-3 text-right">
               <button
@@ -89,7 +97,6 @@ function Section({
           )}
         </div>
 
-        {/* 그리드: 2 / 3 / 4 칼럼 통일 */}
         <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {isLoading &&
             Array.from({ length: 8 }).map((_, i) => (
@@ -113,21 +120,19 @@ function Section({
   )
 }
 
-function useProducts(category: string, limit?: number) {
-  const key = ['products', category, limit]
+/** 공개 해시태그(메인 칩 전용) */
+function useHashtags() {
   return useQuery({
-    queryKey: key,
+    queryKey: ['hashtags'],
     queryFn: async () => {
-      const params = new URLSearchParams()
-      if (category && category !== 'ALL') params.set('category', category)
-      if (limit) params.set('limit', String(limit))
-      const r = await fetch(`/api/products?${params.toString()}`)
-      if (!r.ok) return [] as Product[]
-      return r.json() as Promise<Product[]>
+      const r = await fetch('/api/hashtags')
+      if (!r.ok) return [] as Hashtag[]
+      return r.json() as Promise<Hashtag[]>
     },
   })
 }
 
+/** 카테고리 폴백(해시태그가 0개일 때만 사용) */
 function useCategories() {
   return useQuery({
     queryKey: ['categories'],
@@ -139,7 +144,7 @@ function useCategories() {
   })
 }
 
-function CategoryChip({
+function HashChip({
   label,
   active,
   onClick,
@@ -148,7 +153,7 @@ function CategoryChip({
   label: string
   active?: boolean
   onClick?: () => void
-  emoji?: string
+  emoji?: string | null
 }) {
   return (
     <button
@@ -171,10 +176,49 @@ function CategoryChip({
 export default function App() {
   const nav = useNavigate()
   const isMobile = useMediaQuery('(max-width: 767px)')
-  const [cat, setCat] = useState<string>('ALL')
 
-  const { data: cats } = useCategories()
-  const { data, isLoading } = useProducts(cat, isMobile ? 6 : undefined)
+  // 1) 서버의 해시태그 목록
+  const { data: hashtags = [] } = useHashtags()
+
+  // 2) 폴백(해시태그가 하나도 없을 때만 카테고리로 칩 구성)
+  const { data: cats = [] } = useCategories()
+  const fallbackHashtags: Hashtag[] = useMemo(() =>
+    cats.map((c) => ({
+      id: `cat:${c}`,
+      label: c,
+      type: 'CATEGORY' as const,
+      value: c,
+    })), [cats])
+
+  const chips = (hashtags.length ? hashtags : fallbackHashtags)
+
+  // 선택 상태: 'ALL' 또는 Hashtag
+  const [sel, setSel] = useState<'ALL' | Hashtag>('ALL')
+
+  // 3) 선택에 맞춰 useProducts 파라미터 매핑
+  const queryOpts = useMemo(() => {
+    if (sel === 'ALL') {
+      return { }
+    }
+    if (sel.type === 'CHANNEL') {
+      return { channel: sel.value as 'NEW' | 'BEST' }
+    }
+    if (sel.type === 'CATEGORY') {
+      return { category: sel.value }
+    }
+    // TAG
+    return { tag: sel.value }
+  }, [sel])
+
+  const { data, isLoading } = useProducts({
+    ...(queryOpts as any),
+    limit: isMobile ? 6 : undefined,
+  })
+
+  // 타이틀
+  const title = sel === 'ALL'
+    ? '우리들의 계절'
+    : sel.label
 
   const [modal, setModal] =
     useState<null | { name: 'RECOMMENDED' | 'SEASONAL' | 'BEST' }>(null)
@@ -191,12 +235,73 @@ export default function App() {
         <p className="text-sm">가장 빛이 나야하는 순간까지 언제나 함께 하겠습니다.</p>
       </div>
 
-      {/* 이벤트 상품 리스트 넣기 */}
-      {/* ex ) 1. 밤 10시 30분까지 주문하면 오늘 출발 */}
-      {/* ex ) 2. 예쁘니까 1+1 */}
-      {/* ex ) 3. 실시간으로 사랑받는 'BEST 등등' */}
+      <main className="mt-10">
+        <div className="mx-auto max-w-[1520px] px-3 sm:px-4">
+          <div className="text-center mb-6">
+            <div className="text-sm text-gray-400">지금이 딱이야</div>
+            <h2 className="mt-1 text-2xl md:text-3xl font-semibold tracking-tight">
+              #{title}
+            </h2>
+          </div>
 
-      {/* 큐레이션 섹션 3종 */}
+          {/* 해시태그 칩 */}
+          <div className="mb-8 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+            <HashChip
+              label="전체"
+              active={sel === 'ALL'}
+              onClick={() => setSel('ALL')}
+            />
+            {chips.map((h) => (
+              <HashChip
+                key={h.id}
+                label={h.label}
+                emoji={h.emoji}
+                active={sel !== 'ALL' && (sel as Hashtag).id === h.id}
+                onClick={() => setSel(h)}
+              />
+            ))}
+          </div>
+
+          {/* 상품 그리드 */}
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {isLoading &&
+              Array.from({ length: isMobile ? 6 : 8 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="aspect-[368/462] skeleton rounded-lg" />
+                  <div className="h-4 w-3/4 skeleton rounded" />
+                  <div className="h-4 w-1/2 skeleton rounded" />
+                </div>
+              ))}
+            {data?.map((p) => (
+              <ProductCard key={p.id} p={p} />
+            ))}
+          </div>
+
+          {/* 모바일 more */}
+          {isMobile && (data?.length ?? 0) >= 6 && (
+            <div className="mt-4 text-center">
+              <button
+                className="px-4 py-2 rounded border"
+                onClick={() => {
+                  // 현재 선택 상태를 ProductsPage로 이어가기
+                  const s = new URLSearchParams()
+                  if (sel !== 'ALL') {
+                    if (sel.type === 'CHANNEL') s.set('channel', sel.value)
+                    if (sel.type === 'CATEGORY') s.set('category', sel.value)
+                    if (sel.type === 'TAG') s.set('tag', sel.value)
+                  }
+                  const qs = s.toString()
+                  nav(`/products${qs ? `?${qs}` : ''}`)
+                }}
+              >
+                More
+              </button>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* 컬렉션 섹션은 그대로 유지 */}
       <Section
         title="추천 상품"
         eyebrow="오늘의 PICK"
@@ -216,73 +321,8 @@ export default function App() {
         onAdd={() => setModal({ name: 'BEST' })}
       />
 
-      {/* 카테고리별 리스트 */}
-      {/* 카테고리별 리스트 */}
-      <main className="mt-10">
-        <div className="mx-auto max-w-[1520px] px-3 sm:px-4">
-
-          {/* ⬇️ 상단 서브타이틀 + 메인 타이틀(가운데) */}
-          <div className="text-center mb-6">
-            <div className="text-sm text-gray-400">지금이 딱이야</div>
-            <h2 className="mt-1 text-2xl md:text-3xl font-semibold tracking-tight">
-              #{cat === 'ALL' ? '우리들의 계절' : cat}
-            </h2>
-          </div>
-
-          {/* ⬇️ 해시태그 스타일 카테고리 바 */}
-          <div className="mb-8 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
-            <CategoryChip
-              label="전체"
-              active={cat === 'ALL'}
-              onClick={() => setCat('ALL')}
-            />
-            {cats?.map((c) => (
-              <CategoryChip
-                key={c}
-                label={c}
-                active={cat === c}
-                onClick={() => setCat(c)}
-                emoji={/가을|autumn|fall/i.test(c) ? "🍂" : undefined}  // 가을 관련이면 🍂 표시
-              />
-            ))}
-          </div>
-
-          {/* ⬇️ 상품 그리드 (그대로) */}
-          <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {isLoading &&
-              Array.from({ length: isMobile ? 6 : 8 }).map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <div className="aspect-[368/462] skeleton rounded-lg"></div>
-                  <div className="h-4 w-3/4 skeleton rounded"></div>
-                  <div className="h-4 w-1/2 skeleton rounded"></div>
-                </div>
-              ))}
-            {data?.map((p) => (
-              <ProductCard key={p.id} p={p} />
-            ))}
-          </div>
-
-          {/* 모바일: More 버튼 (그대로) */}
-          {isMobile && (data?.length ?? 0) >= 6 && (
-            <div className="mt-4 text-center">
-              <button
-                className="px-4 py-2 rounded border"
-                onClick={() => {
-                  if (cat === 'ALL') nav('/products')
-                  else nav(`/products?category=${encodeURIComponent(cat)}`)
-                }}
-              >
-                More
-              </button>
-            </div>
-          )}
-        </div>
-      </main>
-
-
       <Footer />
 
-      {/* 관리자: 상품 선택 모달 */}
       {modal && (
         <SelectProductModal name={modal.name} onClose={() => setModal(null)} />
       )}

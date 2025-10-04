@@ -1,7 +1,15 @@
-// useCartSmart.ts
+// src/stores/useCartSmart.ts
 import { useAuth } from '../stores/auth'
 import { useCart } from './useCart'
 import { useGuestCart } from './useGuestCart'
+
+export type CartOption = {
+  variantIndex?: number
+  color?: string
+  colorHex?: string
+  size?: string
+  sku?: string
+}
 
 export function useCartSmart() {
   const { user } = useAuth(s => ({ user: s.user }))
@@ -15,18 +23,22 @@ export function useCartSmart() {
     isLoading: isLoggedIn ? server.cart.isLoading : false,
     guestItems: isLoggedIn ? [] : guest.items,
 
-    // 기존 동기 add (그대로 유지)
-    add: (productId: string, qty = 1) => {
-      if (isLoggedIn) server.addItem.mutate({ productId, qty })
-      else guest.add(productId, qty)
+    // 동기 add
+    add: (productId: string, qty = 1, opt?: CartOption) => {
+      if (isLoggedIn) {
+        // 서버 장바구니에도 옵션을 보낼 수 있게 payload 확장(백엔드 라우트에 맞춰 구현)
+        server.addItem.mutate({ productId, qty, option: opt })
+      } else {
+        guest.add(productId, qty, opt) // ✅ 옵션 저장
+      }
     },
 
-    // ★ 추가: 비동기 add (성공/실패 await 가능)
-    addAsync: async (productId: string, qty = 1) => {
+    // 비동기 add
+    addAsync: async (productId: string, qty = 1, opt?: CartOption) => {
       if (isLoggedIn) {
-        await server.addItem.mutateAsync({ productId, qty })  // 성공/실패 throw
+        await server.addItem.mutateAsync({ productId, qty, option: opt })
       } else {
-        guest.add(productId, qty)
+        guest.add(productId, qty, opt) // ✅ 옵션 저장
         return Promise.resolve()
       }
     },
@@ -45,6 +57,23 @@ export function useCartSmart() {
     },
     invalidate: () => {
       if (isLoggedIn) server.cart.refetch()
+    },
+
+    // 옵션 변경(게스트용 헬퍼)
+    updateGuestOption: (productId: string, opt: CartOption) => {
+      if (!isLoggedIn) guest.updateOption(productId, opt)
+    },
+
+    // 옵션 변경(서버용 헬퍼, 라우트 준비되면 사용)
+    updateOption: async (productId: string, opt: CartOption) => {
+      if (!isLoggedIn) return
+      await fetch(`/api/cart/items/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ option: opt }),
+      })
+      server.cart.refetch()
     }
   }
 }

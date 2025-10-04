@@ -8,12 +8,26 @@ export type CartItem = {
   images: string[]
   qty: number
   line: number
+
+  variantIndex?: number
+  color?: string
+  colorHex?: string
+  size?: string
+  sku?: string
 }
 export type Cart = {
   id: string
   items: CartItem[]
   totalQty: number
   totalPrice: number
+}
+
+type CartOptionPayload = {
+  variantIndex?: number
+  color?: string
+  colorHex?: string
+  size?: string
+  sku?: string
 }
 
 export function useCart() {
@@ -30,12 +44,12 @@ export function useCart() {
   })
 
   const addItem = useMutation({
-    mutationFn: async (payload: { productId: string; qty?: number }) => {
+    mutationFn: async (payload: { productId: string; qty?: number; option?: CartOptionPayload }) => {
       const r = await fetch('/api/cart/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload), // option도 함께 전송(백엔드가 받도록 구현하면 반영됨)
       })
       if (!r.ok) throw new Error('ADD_FAIL')
       return r.json() as Promise<Cart>
