@@ -25,20 +25,32 @@ export default function ProductList() {
   return (
     <div className="min-h-screen bg-white text-[#222]">
       <Nav />
-      <main className="container-max py-6">
-        <h1 className="text-xl font-bold mb-4">
-          {category === 'ALL' ? '전체 상품' : `${category} 상품`}
-        </h1>
+      {/* 컨테이너: 4칸 × (≈368px) + 갭을 고려해 최대폭 1520px로 보정 */}
+      <main className="py-6">
+        <div className="mx-auto max-w-[1520px] px-3 sm:px-4">
+          <h1 className="text-xl font-bold mb-4">
+            {category === 'ALL' ? '전체 상품' : `${category} 상품`}
+          </h1>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {isLoading && Array.from({length: 12}).map((_,i)=>(
-            <div key={i} className="space-y-2">
-              <div className="aspect-[3/4] skeleton"></div>
-              <div className="h-4 w-3/4 skeleton"></div>
-              <div className="h-4 w-1/2 skeleton"></div>
-            </div>
-          ))}
-          {data?.map(p => <ProductCard key={p.id} p={p} />)}
+          <div
+            className="
+              grid gap-3 sm:gap-4
+              grid-cols-2           /* 모바일: 2칸 (375px 기준 카드 ≈180~182px) */
+              md:grid-cols-3
+              lg:grid-cols-4        /* 데스크톱: 4칸 (1920px 기준 카드 ≈368px) */
+            "
+          >
+            {isLoading && Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                {/* 스켈레톤도 카드와 동일한 비율로 */}
+                <div className="aspect-[368/462] skeleton rounded-lg"></div>
+                <div className="h-4 w-3/4 skeleton rounded"></div>
+                <div className="h-4 w-1/2 skeleton rounded"></div>
+              </div>
+            ))}
+
+            {data?.map(p => <ProductCard key={p.id} p={p} />)}
+          </div>
         </div>
       </main>
     </div>

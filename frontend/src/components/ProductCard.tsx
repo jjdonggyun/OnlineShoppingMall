@@ -38,9 +38,15 @@ export default function ProductCard({
     <div className="relative group">
       <Link to={`/products/${p.id}`} className="block">
         {/* 이미지 영역 */}
-        <div className="aspect-[3/4] overflow-hidden rounded-xl bg-gray-100">
-          <img src={display} alt={p.name} className="w-full h-full object-cover" />
-        </div>
+  <div className="relative w-full aspect-[368/462]">
+    <img
+      src={display}
+      alt={p.name}
+      className="absolute inset-0 w-full h-full object-cover"
+      loading="lazy"
+      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+    />
+  </div>
 
         {/* 상품명/가격 영역 */}
         <div className="mt-2 text-sm">

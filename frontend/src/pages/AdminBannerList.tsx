@@ -4,8 +4,8 @@ import { Link } from 'react-router-dom'
 import Nav from '../components/Nav';
 
 type Row = {
-    id: string; title?: string; image: string; link?: string;
-    active: boolean; order: number; startsAt?: string; endsAt?: string;
+    id: string; title?: string; image: string; imageMobile?: string; link?: string;
+    active: boolean; order: number; startsAt?: string; endsAt?: string; device: 'ALL' | 'WEB' | 'MOBILE';
 }
 
 export default function AdminBannerList() {
@@ -46,7 +46,10 @@ export default function AdminBannerList() {
                             <li key={b.id} className="py-3 flex items-center gap-4">
                                 <img src={b.image} className="w-24 h-16 object-cover rounded" />
                                 <div className="flex-1">
-                                    <div className="font-medium">{b.title || '(제목 없음)'} {b.active ? null : <span className="ml-2 text-xs text-rose-600">비활성</span>}</div>
+                                    <div className="font-medium">
+                                        {b.title || '(제목 없음)'} {b.active ? null : <span className="ml-2 text-xs text-rose-600">비활성</span>}
+                                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-gray-200 align-middle">{b.device}</span>
+                                    </div>
                                     <div className="text-xs text-gray-600">order: {b.order} {b.startsAt && ` | ${b.startsAt.slice(0, 10)}`} {b.endsAt && ` ~ ${b.endsAt.slice(0, 10)}`}</div>
                                 </div>
                                 <Link to={`/admin/banners/${b.id}/edit`} className="px-3 py-1.5 rounded border hover:bg-gray-50 text-sm">편집</Link>

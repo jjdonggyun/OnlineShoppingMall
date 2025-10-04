@@ -8,3 +8,33 @@
 body {
   font-family: 'Spoqa Han Sans Neo', sans-serif;
 }
+
+.full-bleed {
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+}
+
+/* 모바일 전체화면 높이: 100dvh 우선, 미지원 브라우저는 --vh 폴백 사용 */
+.mobile-vh {
+  height: calc(var(--vh, 1vh) * 80); /* fallback */
+}
+
+@supports (height: 100dvh) {
+  .mobile-vh {
+    height: 80dvh; /* iOS16+/안드 최신 브라우저에서 정확 */
+  }
+}
+
+/* 풀블리드(좌우 끝까지) */
+.full-bleed {
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+}

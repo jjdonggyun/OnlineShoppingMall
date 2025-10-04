@@ -4,11 +4,54 @@ import { useEffect, useRef, useState } from 'react'
 
 type Banner = { id: string; title?: string; image: string; link?: string }
 
+function useMediaQuery(q: string) {
+  const [ok, setOk] = useState(() => typeof window !== 'undefined' ? window.matchMedia(q).matches : false)
+  useEffect(() => {
+    const m = window.matchMedia(q)
+    const h = (e: MediaQueryListEvent) => setOk(e.matches)
+    setOk(m.matches)
+    m.addEventListener('change', h)
+    return () => m.removeEventListener('change', h)
+  }, [q])
+  return ok
+}
+
+/** 모바일 100vh 버그 대응: --vh CSS 변수에 실제 viewport height(1%) 저장 */
+function useMobileVhVar(active: boolean) {
+  useEffect(() => {
+    if (!active || typeof window === 'undefined') return
+
+    // 100dvh 지원 여부 체크
+    const supportsDVH = CSS && CSS.supports && CSS.supports('height', '100dvh')
+    if (supportsDVH) return // 폴백 불필요
+
+    const setVh = () => {
+      const vh = window.innerHeight * 0.01
+      document.documentElement.style.setProperty('--vh', `${vh}px`)
+    }
+    setVh()
+    window.addEventListener('resize', setVh)
+    window.addEventListener('orientationchange', setVh)
+    return () => {
+      window.removeEventListener('resize', setVh)
+      window.removeEventListener('orientationchange', setVh)
+    }
+  }, [active])
+}
+
+
 export default function Hero() {
+  // Tailwind md(768px) 기준: md 이상이면 WEB, 미만이면 MOBILE
+  const isDesktop = useMediaQuery('(min-width: 768px)')
+  const device = isDesktop ? 'web' : 'mobile'
+
+  // 모바일 전체화면 높이를 정확히 쓰기 위해 --vh 세팅
+  useMobileVhVar(!isDesktop)
+
   const { data } = useQuery<Banner[]>({
-    queryKey: ['banners'],
+    queryKey: ['banners', device],
     queryFn: async () => {
-      const r = await fetch('/api/banners')
+      const r = await fetch(`/api/banners?device=${device}`)
       if (!r.ok) throw new Error('BANNERS')
       return r.json()
     }
@@ -16,6 +59,16 @@ export default function Hero() {
 
   const list = data ?? []
   if (!list.length) return null
+
+  // 공통: 풀블리드/컨테이너 클래스 결정
+  const wrapperClass = isDesktop ? '' : 'full-bleed mt-0'
+
+  // 데스크톱은 기존 비율, 모바일은 실제 화면 높이로 꽉 채움
+  const desktopBoxClass = 'aspect-[16/6] max-h-[480px] min-h-[180px]'
+  const mobileBoxClass = 'mobile-vh w-screen' // ← 여기!
+
+  // 모바일 전용 높이 스타일
+  const mobileFullHeightStyle = !isDesktop ? { height: 'calc(var(--vh, 1vh) * 80)' } : undefined
 
   // 1장: 슬라이더 없이 단일 배너만
   if (list.length === 1) {
@@ -29,8 +82,11 @@ export default function Hero() {
       />
     )
     return (
-      <div className="container-max mt-4">
-        <div className="relative overflow-hidden rounded-2xl aspect-[16/6] max-h-[420px] min-h-[180px]">
+      <div className={wrapperClass}>
+        <div
+          className={`relative overflow-hidden w-full ${isDesktop ? desktopBoxClass : mobileBoxClass}`}
+          style={mobileFullHeightStyle}
+        >
           {b.link ? <a href={b.link} className="block h-full">{Img}</a> : Img}
           {b.title && (
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4">
@@ -42,15 +98,23 @@ export default function Hero() {
     )
   }
 
-  // 여러 장: 분리된 슬라이더 컴포넌트 사용 (훅은 자식 안으로)
+  // 여러 장: 분리된 슬라이더 컴포넌트
   return (
-    <div className="container-max mt-4">
-      <BannerSlider list={list} />
+    <div className={wrapperClass}>
+      <BannerSlider list={list} isDesktop={isDesktop} mobileFullHeightStyle={mobileFullHeightStyle} />
     </div>
   )
 }
 
-function BannerSlider({ list }: { list: Banner[] }) {
+function BannerSlider({
+  list,
+  isDesktop,
+  mobileFullHeightStyle
+}: {
+  list: Banner[]
+  isDesktop: boolean
+  mobileFullHeightStyle?: React.CSSProperties
+}) {
   const AUTOPLAY_MS = 4000
   const TRANSITION_MS = 350
 
@@ -73,9 +137,13 @@ function BannerSlider({ list }: { list: Banner[] }) {
     return () => clearInterval(t)
   }, [paused, list.length])
 
+  const desktopBoxClass = 'aspect-[16/6] max-h-[480px] min-h-[180px]'
+  const mobileBoxClass = 'w-screen'
+
   return (
     <div
-      className="relative overflow-hidden rounded-2xl aspect-[16/8] max-h-[420px] min-h-[180px]"
+      className={`relative overflow-hidden rounded-none w-full ${isDesktop ? desktopBoxClass : mobileBoxClass}`}
+      style={isDesktop ? undefined : mobileFullHeightStyle}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       aria-roledescription="carousel"

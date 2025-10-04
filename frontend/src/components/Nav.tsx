@@ -35,7 +35,7 @@ export default function Nav() {
       <div className="container-max flex items-center justify-between h-14">
         {/* 로고 */}
         <Link to="/" className="text-xl font-bold tracking-tight">
-          <span className="text-brand">ATTRI</span><span className="text-brand-accent">LOOK</span>
+          <span className="text-brand">SUNYA</span><span className="text-brand-accent">LOOK</span>
         </Link>
 
         {/* 데스크톱 메뉴 */}
