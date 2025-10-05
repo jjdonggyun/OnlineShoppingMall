@@ -4,7 +4,7 @@ export type Hashtag = {
   id: string
   label: string
   emoji?: string | null
-  type: 'CATEGORY' | 'TAG' | 'CHANNEL'
+  type: 'CATEGORY' | 'TAG' | 'CHANNEL' | 'MENU'
   value: string
   /** /api/hashtags 에서는 안 내려오므로 optional */
   active?: boolean
@@ -35,5 +35,21 @@ export function useAdminHashtags() {
       if (!r.ok) return [] as Hashtag[]
       return r.json() as Promise<Hashtag[]>
     },
+  })
+}
+
+
+export function useTagDict() {
+  return useQuery({
+    queryKey: ['hashtags','public','TAG'],
+    queryFn: async () => {
+      const r = await fetch('/api/hashtags?type=TAG')
+      if (!r.ok) return {} as Record<string,{label:string; emoji?:string|null}>
+      const list = await r.json() as Array<{ value:string; label:string; emoji?:string|null }>
+      const map: Record<string,{label:string; emoji?:string|null}> = {}
+      for (const h of list) map[h.value] = { label: h.label, emoji: h.emoji ?? null }
+      return map
+    },
+    staleTime: 60_000,
   })
 }

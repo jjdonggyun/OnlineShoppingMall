@@ -3,9 +3,42 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Product } from '../types/product'
 
+/** 간단 태그 사전 훅: /api/hashtags?type=TAG → { [value]: {label, emoji} } */
+function useTagDict() {
+  const [dict, setDict] = useState<Record<string, { label: string; emoji?: string | null }>>({})
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const r = await fetch('/api/hashtags?type=TAG')
+        if (!r.ok) return
+        const list = (await r.json()) as Array<{ value: string; label: string; emoji?: string | null }>
+        if (!alive) return
+        const d: Record<string, { label: string; emoji?: string | null }> = {}
+        for (const h of list) d[h.value] = { label: h.label, emoji: h.emoji ?? null }
+        setDict(d)
+      } catch {
+        // noop
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
+  return dict
+}
+
 function dotStyle(hex?: string | null) {
   const bg = hex || '#999999'
   return { backgroundColor: bg }
+}
+
+function TagBadge({ text }: { text: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border bg-white">
+      {text}
+    </span>
+  )
 }
 
 export default function ProductCard({
@@ -35,6 +68,13 @@ export default function ProductCard({
     return v.map(vv => ({ color: vv.color, colorHex: vv.colorHex, image: vv.coverImage || imgs[0] }))
   }, [p.swatches, p.variants, imgs])
 
+  // 태그 표시용: value → label 매핑
+  const tagDict = useTagDict()
+  const viewTags = useMemo(
+    () => (p.tags ?? []).map(v => tagDict[v]?.label ?? v),
+    [p.tags, tagDict]
+  )
+
   return (
     <div className="relative group">
       <Link to={`/products/${p.id}`} className="block">
@@ -53,9 +93,20 @@ export default function ProductCard({
         <div className="mt-2 text-sm">
           <div className="font-medium">
             {p.name}
-            {p.badge && <span className="ml-1 text-rose-500">[{p.badge}]</span>}
           </div>
           <div className="text-gray-600">{p.price.toLocaleString()}원</div>
+
+          {/* ✅ 배지 대신 TAG 뱃지들 */}
+          {(viewTags.length > 0) && (
+            <div className="mt-1 flex flex-wrap gap-1 min-h-[1.25rem]">
+              {viewTags.slice(0, 4).map((t, i) => (
+                <TagBadge key={i} text={`#${t}`} />
+              ))}
+              {viewTags.length > 4 && (
+                <span className="text-[11px] text-gray-500">+{viewTags.length - 4}</span>
+              )}
+            </div>
+          )}
         </div>
       </Link>
 

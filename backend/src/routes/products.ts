@@ -107,7 +107,8 @@ r.get('/', async (req, res) => {
 // 공개 카테고리
 r.get('/categories', async (_req, res) => {
   try {
-    const cats = await Product.find({ status: 'ACTIVE' }).distinct('categories')
+    // 기존: { status: 'ACTIVE' }
+    const cats = await Product.find({ visible: true }).distinct('categories')
     res.json(cats.filter(Boolean).sort())
   } catch {
     res.status(500).json({ error: 'SERVER_ERROR' })

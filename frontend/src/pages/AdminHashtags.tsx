@@ -1,29 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import Nav from '../components/Nav'
 import { useAuth } from '../stores/auth'
+import { useAdminHashtags } from '../hooks/hashtags'
 
-type Hashtag = {
-  id: string
-  label: string
-  emoji?: string | null | undefined
-  type: 'CATEGORY'|'TAG'|'CHANNEL'
-  value: string
-  active?: boolean
-  order?: number
-}
-
-function useAdminHashtags() {
-  return useQuery({
-    queryKey: ['admin','hashtags'],
-    queryFn: async () => {
-      const r = await fetch('/api/hashtags/admin', { credentials: 'include' })
-      if (!r.ok) throw new Error('LOAD_FAIL')
-      return r.json() as Promise<(Hashtag & { createdAt?: string; updatedAt?: string })[]>
-    }
-  })
-}
+type Type = 'MENU'|'CATEGORY'|'TAG'|'CHANNEL'
 
 export default function AdminHashtags() {
   const { user } = useAuth(s => ({ user: s.user }))
@@ -35,12 +17,14 @@ export default function AdminHashtags() {
     if (!user || user.role !== 'ADMIN') nav('/', { replace: true })
   }, [user, nav])
 
-  const { data, isLoading } = useAdminHashtags()
+  // 목록 타입 필터
+  const [filterType, setFilterType] = useState<Type | 'ALL'>('ALL')
+  const { data, isLoading } = useAdminHashtags(filterType === 'ALL' ? undefined : filterType)
 
   // 신규 생성 폼
   const [label, setLabel] = useState('')
   const [emoji, setEmoji] = useState('')
-  const [type, setType] = useState<'CATEGORY'|'TAG'|'CHANNEL'>('CATEGORY')
+  const [type, setType] = useState<Type>('MENU') // 기본: MENU 추가 용도
   const [value, setValue] = useState('')
   const [order, setOrder] = useState<number | ''>('')
   const [active, setActive] = useState(true)
@@ -63,10 +47,10 @@ export default function AdminHashtags() {
     })
     if (!r.ok) return alert('생성 실패')
     setLabel(''); setEmoji(''); setValue(''); setOrder(''); setActive(true)
-    await qc.invalidateQueries({ queryKey: ['admin','hashtags'] })
+    await qc.invalidateQueries({ queryKey: ['hashtags','admin'] })
   }
 
-  async function updateOne(id: string, patch: Partial<Hashtag>) {
+  async function updateOne(id: string, patch: Partial<{ label:string; emoji?:string; type:Type; value:string; active:boolean; order:number }>) {
     const r = await fetch(`/api/hashtags/${id}`, {
       method: 'PATCH',
       credentials: 'include',
@@ -74,14 +58,14 @@ export default function AdminHashtags() {
       body: JSON.stringify(patch)
     })
     if (!r.ok) return alert('수정 실패')
-    await qc.invalidateQueries({ queryKey: ['admin','hashtags'] })
+    await qc.invalidateQueries({ queryKey: ['hashtags','admin'] })
   }
 
   async function removeOne(id: string) {
     if (!confirm('삭제하시겠습니까?')) return
     const r = await fetch(`/api/hashtags/${id}`, { method: 'DELETE', credentials: 'include' })
     if (!r.ok) return alert('삭제 실패')
-    await qc.invalidateQueries({ queryKey: ['admin','hashtags'] })
+    await qc.invalidateQueries({ queryKey: ['hashtags','admin'] })
   }
 
   const sorted = useMemo(() =>
@@ -96,9 +80,25 @@ export default function AdminHashtags() {
           <div>
             <h1 className="text-2xl font-bold">해시태그 관리</h1>
             <p className="text-sm text-gray-500 mt-1">
-              메인 섹션에 노출할 칩을 관리합니다. (type: CATEGORY/TAG/CHANNEL)
+              Nav 메뉴/채널 및 메인 칩을 관리합니다. (type: MENU/CATEGORY/TAG/CHANNEL)
             </p>
           </div>
+        </div>
+
+        {/* 필터 */}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <select
+            className="border rounded px-3 py-2"
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value as any)}
+          >
+            <option value="ALL">ALL</option>
+            <option value="MENU">MENU (Nav 상단 카테고리 메뉴)</option>
+            <option value="CHANNEL">CHANNEL (NEW/BEST 등)</option>
+            <option value="CATEGORY">CATEGORY (카테고리 칩)</option>
+            <option value="TAG">TAG (태그 칩)</option>
+          </select>
+          <span className="text-xs text-gray-500">※ 목록은 order 순으로 정렬됩니다.</span>
         </div>
 
         {/* 생성 폼 */}
@@ -119,15 +119,16 @@ export default function AdminHashtags() {
             <select
               className="border rounded px-3 py-2 sm:col-span-1"
               value={type}
-              onChange={e => setType(e.target.value as any)}
+              onChange={e => setType(e.target.value as Type)}
             >
-              <option value="CATEGORY">CATEGORY</option>
-              <option value="TAG">TAG</option>
-              <option value="CHANNEL">CHANNEL</option>
+              <option value="MENU">MENU (Nav 메뉴)</option>
+              <option value="CHANNEL">CHANNEL (예: NEW/BEST)</option>
+              <option value="CATEGORY">CATEGORY (카테고리 칩)</option>
+              <option value="TAG">TAG (태그 칩)</option>
             </select>
             <input
               className="border rounded px-3 py-2 sm:col-span-1"
-              placeholder="value (카테고리명/태그/NEW|BEST)"
+              placeholder="value (MENU/CATEGORY/TAG=이름, CHANNEL=NEW|BEST)"
               value={value}
               onChange={e => setValue(e.target.value)}
             />
@@ -200,12 +201,13 @@ export default function AdminHashtags() {
                   <td className="py-2 pr-3">
                     <select
                       className="border rounded px-2 py-1"
-                      defaultValue={h.type}
-                      onChange={(e) => updateOne(h.id, { type: e.target.value as any })}
+                      defaultValue={h.type as Type}
+                      onChange={(e) => updateOne(h.id, { type: e.target.value as Type })}
                     >
+                      <option value="MENU">MENU</option>
+                      <option value="CHANNEL">CHANNEL</option>
                       <option value="CATEGORY">CATEGORY</option>
                       <option value="TAG">TAG</option>
-                      <option value="CHANNEL">CHANNEL</option>
                     </select>
                   </td>
                   <td className="py-2 pr-3">

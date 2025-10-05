@@ -9,12 +9,13 @@ import { useAuth } from '../stores/auth'
 import SelectProductModal from '../components/SelectProductModal'
 import { useProducts } from '../hooks/useProducts'
 
-type Hashtag = {
+/** 메인 칩 전용 해시태그 타입: CATEGORY만 취급 */
+type MainHashtag = {
   id: string
-  label: string
+  label: string        // 칩에 보여줄 텍스트(자유롭게 변경 가능)
   emoji?: string | null
-  type: 'CATEGORY'|'TAG'|'CHANNEL'
-  value: string
+  type: 'CATEGORY'     // 메인 섹션은 CATEGORY만
+  value: string        // 실제 필터에 쓸 카테고리 값
 }
 
 function useMediaQuery(q: string) {
@@ -120,14 +121,15 @@ function Section({
   )
 }
 
-/** 공개 해시태그(메인 칩 전용) */
-function useHashtags() {
+/** 메인 섹션용 해시태그: CATEGORY만 가져오기 */
+function useMainCategoryHashtags() {
   return useQuery({
-    queryKey: ['hashtags'],
+    queryKey: ['hashtags', 'main-category-only'],
     queryFn: async () => {
-      const r = await fetch('/api/hashtags')
-      if (!r.ok) return [] as Hashtag[]
-      return r.json() as Promise<Hashtag[]>
+      // ★ CATEGORY만! (MENU/TAG/CHANNEL 제외)
+      const r = await fetch('/api/hashtags?type=CATEGORY')
+      if (!r.ok) return [] as MainHashtag[]
+      return r.json() as Promise<MainHashtag[]>
     },
   })
 }
@@ -177,37 +179,32 @@ export default function App() {
   const nav = useNavigate()
   const isMobile = useMediaQuery('(max-width: 767px)')
 
-  // 1) 서버의 해시태그 목록
-  const { data: hashtags = [] } = useHashtags()
+  // 1) 서버의 "CATEGORY 타입" 해시태그만 로드 (메인 칩 전용)
+  const { data: catHashtags = [] } = useMainCategoryHashtags()
 
   // 2) 폴백(해시태그가 하나도 없을 때만 카테고리로 칩 구성)
   const { data: cats = [] } = useCategories()
-  const fallbackHashtags: Hashtag[] = useMemo(() =>
-    cats.map((c) => ({
-      id: `cat:${c}`,
-      label: c,
-      type: 'CATEGORY' as const,
-      value: c,
-    })), [cats])
+  const fallbackHashtags: MainHashtag[] = useMemo(
+    () =>
+      cats.map((c) => ({
+        id: `cat:${c}`,
+        label: c,            // 폴백에선 라벨=값
+        type: 'CATEGORY' as const,
+        value: c,
+      })),
+    [cats]
+  )
 
-  const chips = (hashtags.length ? hashtags : fallbackHashtags)
+  // 메인 칩 소스: 있으면 CATEGORY 해시태그, 없으면 폴백
+  const chips: MainHashtag[] = catHashtags.length ? catHashtags : fallbackHashtags
 
-  // 선택 상태: 'ALL' 또는 Hashtag
-  const [sel, setSel] = useState<'ALL' | Hashtag>('ALL')
+  // 선택 상태: 'ALL' 또는 CATEGORY 해시태그
+  const [sel, setSel] = useState<'ALL' | MainHashtag>('ALL')
 
-  // 3) 선택에 맞춰 useProducts 파라미터 매핑
+  // 3) 선택에 맞춰 useProducts 파라미터 매핑 (CATEGORY만)
   const queryOpts = useMemo(() => {
-    if (sel === 'ALL') {
-      return { }
-    }
-    if (sel.type === 'CHANNEL') {
-      return { channel: sel.value as 'NEW' | 'BEST' }
-    }
-    if (sel.type === 'CATEGORY') {
-      return { category: sel.value }
-    }
-    // TAG
-    return { tag: sel.value }
+    if (sel === 'ALL') return {}
+    return { category: sel.value }
   }, [sel])
 
   const { data, isLoading } = useProducts({
@@ -216,9 +213,7 @@ export default function App() {
   })
 
   // 타이틀
-  const title = sel === 'ALL'
-    ? '우리들의 계절'
-    : sel.label
+  const title = sel === 'ALL' ? '우리들의 계절' : sel.label
 
   const [modal, setModal] =
     useState<null | { name: 'RECOMMENDED' | 'SEASONAL' | 'BEST' }>(null)
@@ -244,7 +239,7 @@ export default function App() {
             </h2>
           </div>
 
-          {/* 해시태그 칩 */}
+          {/* 해시태그 칩 (CATEGORY만) */}
           <div className="mb-8 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
             <HashChip
               label="전체"
@@ -254,9 +249,9 @@ export default function App() {
             {chips.map((h) => (
               <HashChip
                 key={h.id}
-                label={h.label}
+                label={h.label}       // 화면 표시 이름
                 emoji={h.emoji}
-                active={sel !== 'ALL' && (sel as Hashtag).id === h.id}
+                active={sel !== 'ALL' && (sel as MainHashtag).id === h.id}
                 onClick={() => setSel(h)}
               />
             ))}
@@ -283,12 +278,10 @@ export default function App() {
               <button
                 className="px-4 py-2 rounded border"
                 onClick={() => {
-                  // 현재 선택 상태를 ProductsPage로 이어가기
+                  // 현재 선택 상태를 ProductsPage로 이어가기 (CATEGORY만)
                   const s = new URLSearchParams()
                   if (sel !== 'ALL') {
-                    if (sel.type === 'CHANNEL') s.set('channel', sel.value)
-                    if (sel.type === 'CATEGORY') s.set('category', sel.value)
-                    if (sel.type === 'TAG') s.set('tag', sel.value)
+                    s.set('category', sel.value)   // 필터는 value 사용
                   }
                   const qs = s.toString()
                   nav(`/products${qs ? `?${qs}` : ''}`)

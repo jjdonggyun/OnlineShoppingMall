@@ -7,6 +7,37 @@ import { useAuth } from '../stores/auth'
 import { useCartSmart } from '../stores/useCartSmart'
 import type { Product, Variant, VariantSize } from '../types/product'
 
+/** 간단 태그 사전 훅: /api/hashtags?type=TAG → { [value]: {label, emoji} } */
+function useTagDict() {
+  const [dict, setDict] = useState<Record<string, { label: string; emoji?: string | null }>>({})
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const r = await fetch('/api/hashtags?type=TAG')
+        if (!r.ok) return
+        const list = (await r.json()) as Array<{ value: string; label: string; emoji?: string | null }>
+        if (!alive) return
+        const d: Record<string, { label: string; emoji?: string | null }> = {}
+        for (const h of list) d[h.value] = { label: h.label, emoji: h.emoji ?? null }
+        setDict(d)
+      } catch {
+        // noop
+      }
+    })()
+    return () => { alive = false }
+  }, [])
+  return dict
+}
+
+function TagBadge({ text }: { text: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-white">
+      {text}
+    </span>
+  )
+}
+
 export default function ProductDetail() {
   const { id } = useParams()
   const nav = useNavigate()
@@ -78,16 +109,6 @@ export default function ProductDetail() {
   function next() { setIdx(i => (i + 1) % imgs.length) }
   function go(n: number) { setIdx(n) }
 
-  // ===== 관리자: 삭제/상태 토글 =====
-  async function onDelete() {
-    if (!id) return
-    if (!confirm('정말 삭제하시겠습니까?')) return
-    const r = await fetch(`/api/products/${id}`, { method: 'DELETE', credentials: 'include' })
-    if (!r.ok) { alert('삭제 실패'); return }
-    qc.invalidateQueries({ queryKey: ['products'] })
-    nav('/')
-  }
-
   // 색상/사이즈 선택 가능 여부
   const canAdd =
     (variants.length === 0) || (vIdx != null && !!sizeName)
@@ -123,6 +144,13 @@ export default function ProductDetail() {
     }
   }
 
+  // 태그 표시용: value → label 매핑
+  const tagDict = useTagDict()
+  const viewTags = useMemo(
+    () => (d.tags ?? []).map(v => tagDict[v]?.label ?? v),
+    [d.tags, tagDict]
+  )
+
   return (
     <div className="min-h-screen bg-white text-[#222]">
       <Nav />
@@ -130,40 +158,6 @@ export default function ProductDetail() {
       <div className="container-max py-4">
         <Link to="/" className="text-sm text-gray-600">← 목록으로</Link>
       </div>
-
-      {user?.role === 'ADMIN' && (
-        <div className="px-4 flex gap-2">
-          <button
-            onClick={onDelete}
-            className="text-sm px-3 py-1.5 rounded-lg border border-red-300 text-red-600 hover:bg-red-50"
-          >
-            삭제
-          </button>
-          <button
-            onClick={async () => {
-              const to = d.status === 'SOLD_OUT' ? 'ACTIVE' : 'SOLD_OUT'
-              if (!confirm(to === 'SOLD_OUT' ? '품절로 표시할까요?' : '판매 재개할까요?')) return
-              const r = await fetch(`/api/products/${d.id}/status`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ status: to })
-              })
-              if (r.ok) {
-                await qc.invalidateQueries({ queryKey: ['product', id] })
-                setToast({ type: 'ok', msg: to === 'SOLD_OUT' ? '품절 처리됨' : '판매 재개됨' })
-                setTimeout(() => setToast(null), 1000)
-              } else {
-                setToast({ type: 'err', msg: '처리에 실패했습니다' })
-                setTimeout(() => setToast(null), 1200)
-              }
-            }}
-            className="text-sm px-3 py-1.5 rounded-lg border hover:bg-gray-50"
-          >
-            {d.status === 'SOLD_OUT' ? '판매 재개' : '품절 처리'}
-          </button>
-        </div>
-      )}
 
       <div className="container-max grid md:grid-cols-2 gap-8 py-6">
         {/* 이미지 갤러리 */}
@@ -190,6 +184,13 @@ export default function ProductDetail() {
         <div>
           <div className="text-xs text-gray-500">{d.productNo}</div>
           <h1 className="text-2xl font-bold">{d.name}</h1>
+
+          {/* ✅ 배지 대신 TAG 뱃지들 */}
+          {(viewTags.length > 0) && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {viewTags.map((t, i) => <TagBadge key={i} text={`#${t}`} />)}
+            </div>
+          )}
 
           {(d.categories?.length ?? 0) > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">

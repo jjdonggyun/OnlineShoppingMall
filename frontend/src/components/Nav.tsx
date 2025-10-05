@@ -1,8 +1,23 @@
-// src/components/Nav.tsx
 import { Link, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../stores/auth'
 import { useCartSmart } from '../stores/useCartSmart'
+
+type PubHash = {
+  id: string
+  label: string
+  emoji?: string | null
+  type: 'MENU' | 'CATEGORY' | 'TAG' | 'CHANNEL'
+  value: string
+  order?: number
+}
+
+async function fetchPublic(type?: PubHash['type']) {
+  const qs = type ? `?type=${encodeURIComponent(type)}` : ''
+  const r = await fetch(`/api/hashtags${qs}`)
+  if (!r.ok) return [] as PubHash[]
+  return r.json() as Promise<PubHash[]>
+}
 
 export default function Nav() {
   const { user, clear } = useAuth()
@@ -27,6 +42,25 @@ export default function Nav() {
     clear()
   }
 
+  // ─────────────── 해시태그: MENU(내비 메뉴) & CHANNEL(채널) 동적 로드
+  const [menus, setMenus] = useState<PubHash[]>([])
+  const [channels, setChannels] = useState<PubHash[]>([])
+
+  useEffect(() => {
+    let alive = true
+    Promise.all([fetchPublic('MENU'), fetchPublic('CHANNEL')]).then(([menuList, channelList]) => {
+      if (!alive) return
+      // 안전 정렬 (백엔드에서 이미 order, createdAt 순)
+      const sort = (a: PubHash, b: PubHash) => (a.order ?? 0) - (b.order ?? 0)
+      setMenus(menuList.slice().sort(sort))
+      setChannels(channelList.slice().sort(sort))
+    })
+    return () => { alive = false }
+  }, [])
+
+  const desktopMenu = useMemo(() => menus, [menus])
+  const desktopChannels = useMemo(() => channels, [channels])
+
   return (
     <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b">
       <div className="flex items-center justify-between h-14 px-5">
@@ -36,29 +70,37 @@ export default function Nav() {
 
         {/* 데스크톱 메뉴 */}
         <nav className="hidden md:flex items-center gap-6 text-sm text-gray-700">
-          <Link to="/products?channel=NEW" className="hover:text-black">NEW</Link>
-          <Link to="/products?channel=BEST" className="hover:text-black">BEST</Link>
-          <Link to="/products?category=아우터&가디건" className="hover:text-black">아우터&가디건</Link>
-          <Link to="/products?category=원피스" className="hover:text-black">원피스</Link>
-          <Link to="/products?category=블라우스&셔츠" className="hover:text-black">블라우스&셔츠</Link>
-          <Link to="/products?category=티셔츠" className="hover:text-black">티셔츠</Link>
-          <Link to="/products?category=니트" className="hover:text-black">니트</Link>
-          <Link to="/products?category=스커트" className="hover:text-black">스커트</Link>
-          <Link to="/products?category=팬츠" className="hover:text-black">팬츠</Link>
-          <Link to="/products?category=언더웨어" className="hover:text-black">언더웨어</Link>
-          <Link to="/products?category=악세잡화" className="hover:text-black">악세잡화</Link>
-          <Link to="/products?category=바캉스룩" className="hover:text-black">바캉스룩</Link>
-          <Link to="/products?category=커플룩" className="hover:text-black">커플룩</Link>
+          {/* 채널 섹션 (예: NEW, BEST) */}
+          {desktopChannels.map(c => (
+            <Link
+              key={c.id}
+              to={`/products?channel=${encodeURIComponent(c.value)}`}
+              className="hover:text-black"
+            >
+              {c.label}
+            </Link>
+          ))}
+          {/* 구분선 */}
+          {desktopChannels.length > 0 && <span className="w-px h-4 bg-gray-200" />}
+
+          {/* 메뉴 섹션 (카테고리 링크) */}
+          {desktopMenu.map(m => (
+            <Link
+              key={m.id}
+              to={`/products?category=${encodeURIComponent(m.value)}`}
+              className="hover:text-black"
+            >
+              {m.label}
+            </Link>
+          ))}
         </nav>
 
         {/* 우측 유틸(데스크톱) */}
         <div className="hidden md:flex items-center gap-4 text-sm">
           {user?.role === 'ADMIN' && (
             <>
-              <Link to="/admin/products" className="px-3 py-1.5 rounded-lg border hover:bg-gray-50">상품 관리</Link>
-              {/* <Link to="/admin/products/new" className="px-3 py-1.5 rounded-lg border hover:bg-gray-50">상품 등록</Link> */}
-              {/* <Link to="/admin/products/soldout" className="px-3 py-1.5 rounded-lg border hover:bg-gray-50">품절 상품</Link> */}
-              {/* <Link to="/admin/banners" className="px-3 py-1.5 rounded-lg border hover:bg-gray-50">배너 관리</Link> */}
+              <Link to="/admin/products" className="px-3 py-1.5 rounded-lg border hover:bg-gray-50">관리자 페이지</Link>
+              {/* <Link to="/admin/hashtags" className="px-3 py-1.5 rounded-lg border hover:bg-gray-50">해시태그 관리</Link> */}
             </>
           )}
 
@@ -134,19 +176,35 @@ export default function Nav() {
         <div className="p-4 overflow-y-auto bg-white h-screen">
           <nav className="flex flex-col gap-3 text-[15px]">
             <Link to="/" className="py-2 px-2 rounded hover:bg-gray-50">홈</Link>
-            <Link to="/products?channel=NEW"  className="py-2 px-2 rounded hover:bg-gray-50">NEW</Link>
-            <Link to="/products?channel=BEST" className="py-2 px-2 rounded hover:bg-gray-50">BEST</Link>
-            <Link to="/products?category=아우터&가디건" className="py-2 px-2 rounded hover:bg-gray-50">아우터&가디건</Link>
-            <Link to="/products?category=원피스" className="py-2 px-2 rounded hover:bg-gray-50">원피스</Link>
-            <Link to="/products?category=블라우스&셔츠" className="py-2 px-2 rounded hover:bg-gray-50">블라우스&셔츠</Link>
-            <Link to="/products?category=티셔츠" className="py-2 px-2 rounded hover:bg-gray-50">티셔츠</Link>
-            <Link to="/products?category=니트" className="py-2 px-2 rounded hover:bg-gray-50">니트</Link>
-            <Link to="/products?category=스커트" className="py-2 px-2 rounded hover:bg-gray-50">스커트</Link>
-            <Link to="/products?category=팬츠" className="py-2 px-2 rounded hover:bg-gray-50">팬츠</Link>
-            <Link to="/products?category=언더웨어" className="py-2 px-2 rounded hover:bg-gray-50">언더웨어</Link>
-            <Link to="/products?category=악세잡화" className="py-2 px-2 rounded hover:bg-gray-50">악세잡화</Link>
-            <Link to="/products?category=바캉스룩" className="py-2 px-2 rounded hover:bg-gray-50">바캉스룩</Link>
-            <Link to="/products?category=커플룩" className="py-2 px-2 rounded hover:bg-gray-50">커플룩</Link>
+
+            {/* 채널 그룹 */}
+            {desktopChannels.length > 0 && (
+              <>
+                <div className="mt-2 mb-1 text-xs font-semibold text-gray-500 px-2">채널</div>
+                {desktopChannels.map(c => (
+                  <Link
+                    key={c.id}
+                    to={`/products?channel=${encodeURIComponent(c.value)}`}
+                    className="py-2 px-2 rounded hover:bg-gray-50"
+                  >
+                    {c.label}
+                  </Link>
+                ))}
+                <hr className="my-3" />
+              </>
+            )}
+
+            {/* 메뉴(카테고리) 그룹 */}
+            <div className="mt-1 mb-1 text-xs font-semibold text-gray-500 px-2">카테고리</div>
+            {desktopMenu.map(m => (
+              <Link
+                key={m.id}
+                to={`/products?category=${encodeURIComponent(m.value)}`}
+                className="py-2 px-2 rounded hover:bg-gray-50"
+              >
+                {m.label}
+              </Link>
+            ))}
           </nav>
 
           <hr className="my-4" />
@@ -173,10 +231,8 @@ export default function Nav() {
                 <button onClick={logout} className="py-2 px-2 rounded border hover:bg-gray-50 text-left">로그아웃</button>
                 {user.role === 'ADMIN' && (
                   <>
-                    <Link to="/admin/products"  className="py-2 px-2 rounded border hover:bg-gray-50">상품 관리</Link>
-                    {/* <Link to="/admin/products/new" className="py-2 px-2 rounded border hover:bg-gray-50">상품 등록</Link> */}
-                    {/* <Link to="/admin/products/soldout" className="py-2 px-2 rounded border hover:bg-gray-50">품절 상품</Link> */}
-                    {/* <Link to="/admin/banners" className="py-2 px-2 rounded border hover:bg-gray-50">배너 관리</Link> */}
+                    <Link to="/admin/products"  className="py-2 px-2 rounded border hover:bg-gray-50">관리자 페이지</Link>
+                    {/* <Link to="/admin/hashtags" className="py-2 px-2 rounded border hover:bg-gray-50">해시태그 관리</Link> */}
                   </>
                 )}
               </>
