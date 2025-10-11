@@ -1,8 +1,5 @@
 # 쇼핑몰 (MongoDB + Express + React + TS)
 
-> ⚠️ 참고: 이 코드는 **벤치마킹/학습용 레이아웃**과 **간단한 로그인(ADMIN/USER Role)** 을 포함합니다.
-> 운영 시에는 도메인/보안/이미지/결제 등을 보강하세요.
-
 ## 폴더 구조
 ```
 shopping-mall-mongo-auth/
