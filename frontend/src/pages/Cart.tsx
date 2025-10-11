@@ -5,7 +5,6 @@ import { useCart } from '../stores/useCart'
 import { useCartSmart } from '../stores/useCartSmart'
 import Nav from '../components/Nav'
 
-// 서버/게스트 공통으로 제품 상세(옵션 표시용) 캐시
 type PMap = Record<
   string,
   {
@@ -22,84 +21,109 @@ type PMap = Record<
   }
 >
 
-// 장바구니 행(표시용)
 type Row = {
   productId: string
   name: string
   price: number
   images: string[]
   qty: number
-  line: number
-  // 선택 옵션(있을 수 있음)
+  serverLine?: number
+  linePrice: number
   variantIndex?: number | null
-  color?: string
-  colorHex?: string
-  size?: string
-  sku?: string
+  color?: string | null
+  colorHex?: string | null
+  size?: string | null
+  sku?: string | null
 }
 
 export default function CartPage() {
   const smart = useCartSmart()
-  const server = useCart() // 서버 데이터(shape) 재사용
-  const [products, setProducts] = useState<PMap>({})
+  const server = useCart()
 
-  // 게스트일 때, productId 목록으로 벌크 조회(옵션 표시 위해 variants/swatches까지 로드)
+  const [products, setProducts] = useState<PMap>({})
+  const [editing, setEditing] = useState<Record<string, { vIdx: number | null; sizeName: string | null }>>({})
+
+  // ──────────────────────────────── helpers
+  function lineKey(row: Row, isLoggedIn: boolean) {
+    return isLoggedIn && row.serverLine != null
+      ? `s:${row.serverLine}` // 서버 장바구니는 라인 인덱스로 고유화
+      : `g:${row.productId}:${row.sku ?? row.size ?? row.variantIndex ?? ''}` // 게스트는 옵션 조합으로 구분
+  }
+
+  async function ensureProductLoaded(id: string) {
+    if (products[id]) return
+    try {
+      const r = await fetch(`/api/products/${id}`)
+      if (!r.ok) return
+      const p = await r.json()
+      setProducts(prev => ({
+        ...prev,
+        [id]: {
+          name: p.name,
+          price: p.price,
+          images: p.images || [],
+          variants: p.variants || [],
+          swatches: p.swatches || [],
+        }
+      }))
+    } catch {}
+  }
+
+  // 게스트일 때 미리 상품 상세 로드(가격/이미지/옵션)
   useEffect(() => {
     if (smart.isLoggedIn) return
     const ids = smart.guestItems.map(it => it.productId)
     if (ids.length === 0) { setProducts({}); return }
-    ; (async () => {
+    ;(async () => {
       const entries: [string, PMap[string]][] = []
       for (const id of ids) {
         try {
           const r = await fetch(`/api/products/${id}`)
           if (!r.ok) continue
           const p = await r.json()
-          entries.push([
-            id,
-            {
-              name: p.name,
-              price: p.price,
-              images: p.images || [],
-              variants: p.variants || [],
-              swatches: p.swatches || [],
-            }
-          ])
-        } catch { }
+          entries.push([id, {
+            name: p.name,
+            price: p.price,
+            images: p.images || [],
+            variants: p.variants || [],
+            swatches: p.swatches || [],
+          }])
+        } catch {}
       }
       setProducts(Object.fromEntries(entries))
     })()
   }, [smart.isLoggedIn, smart.guestItems])
 
-  // 서버 유저라면, 장바구니 속 아이템에 이미 옵션 정보(color/size 등)가 들어있다고 가정
-  // 게스트는 smart.guestItems 쪽의 opt를 활용(없으면 undefined)
+  // 표 렌더용 rows
   const rows: Row[] = useMemo(() => {
     if (smart.isLoggedIn) {
       if (server.cart.isLoading || !server.cart.data) return []
       return server.cart.data.items.map((it: any) => ({
         productId: it.productId,
         name: it.name,
-        price: it.price,
-        images: it.images,
-        qty: it.qty,
-        line: it.line,
+        price: Number(it.price) || 0,
+        images: Array.isArray(it.images) ? it.images : [],
+        qty: Number(it.qty) || 0,
+        serverLine: typeof it.line === 'number' ? it.line : undefined,
+        linePrice: Number(it.linePrice ?? (Number(it.price) || 0) * (Number(it.qty) || 0)) || 0,
         variantIndex: it.variantIndex ?? null,
-        color: it.color,
-        colorHex: it.colorHex,
-        size: it.size,
-        sku: it.sku,
+        color: it.color ?? null,
+        colorHex: it.colorHex ?? null,
+        size: it.size ?? null,
+        sku: it.sku ?? null,
       }))
     } else {
       return smart.guestItems.map((it: any) => {
         const p = products[it.productId]
-        const price = p?.price ?? 0
+        const price = Number(p?.price ?? 0) || 0
+        const qty = Number(it.qty) || 0
         return {
           productId: it.productId,
           name: p?.name ?? '(삭제된 상품)',
           price,
           images: p?.images ?? [],
-          qty: it.qty,
-          line: price * it.qty,
+          qty,
+          linePrice: price * qty,
           variantIndex: it.variantIndex ?? null,
           color: it.color ?? null,
           colorHex: it.colorHex ?? null,
@@ -110,61 +134,77 @@ export default function CartPage() {
     }
   }, [smart.isLoggedIn, server.cart.isLoading, server.cart.data, smart.guestItems, products])
 
-  useEffect(() => {
-    if (!smart.isLoggedIn) {
-      console.log('[guestItems]', smart.guestItems)
-    } else {
-      console.log('[server cart data]', server.cart.data?.items)
-    }
-  }, [smart.isLoggedIn, smart.guestItems, server.cart.data])
+  const totalQty = smart.isLoggedIn
+    ? (server.cart.data?.totalQty ?? rows.reduce((s, r) => s + r.qty, 0))
+    : rows.reduce((s, r) => s + r.qty, 0)
 
-  const totalQty = rows.reduce((s, r) => s + r.qty, 0)
-  const totalPrice = rows.reduce((s, r) => s + r.line, 0)
+  const totalPrice = smart.isLoggedIn
+    ? (server.cart.data?.totalPrice ?? rows.reduce((s, r) => s + r.linePrice, 0))
+    : rows.reduce((s, r) => s + r.linePrice, 0)
 
-  // ===== 옵션 변경 UI 상태 =====
-  // 편집 중인 productId -> { vIdx, sizeName }
-  const [editing, setEditing] = useState<Record<string, { vIdx: number | null; sizeName: string | null }>>({})
-
+  // ──────────────────────────────── edit state ops (라인 키 기준)
   function startEdit(row: Row) {
-    // 현재 선택 상태를 기본값으로
+    void ensureProductLoaded(row.productId)
+    const k = lineKey(row, smart.isLoggedIn)
     setEditing(prev => ({
       ...prev,
-      [row.productId]: {
+      [k]: {
         vIdx: typeof row.variantIndex === 'number' ? row.variantIndex : null,
         sizeName: row.size ?? null
       }
     }))
   }
-  function cancelEdit(productId: string) {
+
+  function cancelEdit(rowOrKey: Row | string) {
+    const k = typeof rowOrKey === 'string' ? rowOrKey : lineKey(rowOrKey, smart.isLoggedIn)
     setEditing(prev => {
-      const { [productId]: _, ...rest } = prev
+      const { [k]: _, ...rest } = prev
       return rest
     })
   }
 
-  // 색상/사이즈 변경 핸들러(편집 모드 내)
-  function setEditColor(productId: string, vIdx: number) {
-    setEditing(prev => ({
-      ...prev,
-      [productId]: { vIdx, sizeName: null } // 색상 바꾸면 사이즈 초기화
-    }))
-  }
-  function setEditSize(productId: string, name: string) {
-    setEditing(prev => ({
-      ...prev,
-      [productId]: { ...(prev[productId] ?? { vIdx: null, sizeName: null }), sizeName: name }
-    }))
+  function setEditColor(row: Row, vIdx: number) {
+    const k = lineKey(row, smart.isLoggedIn)
+    setEditing(prev => ({ ...prev, [k]: { vIdx, sizeName: null } }))
   }
 
-  // 옵션 적용(서버/게스트 각각 처리; 메서드 없으면 폴백으로 remove→add)
-  async function applyOption(row: Row) {
-    const edit = editing[row.productId]
+  function setEditSize(row: Row, name: string) {
+    const k = lineKey(row, smart.isLoggedIn)
+    setEditing(prev => {
+      const cur = prev[k] ?? { vIdx: null, sizeName: null }
+      return { ...prev, [k]: { ...cur, sizeName: name } }
+    })
+  }
+
+  // ──────────────────────────────── qty / remove
+  async function changeQty(row: Row, nextQty: number) {
+    const q = Math.max(1, nextQty)
+    if (smart.isLoggedIn) {
+      if (row.serverLine == null) return
+      await (server as any).updateQtyByLine.mutateAsync({ line: row.serverLine, qty: q })
+    } else {
+      smart.setQty(row.productId, q)
+    }
+  }
+
+  async function removeRow(row: Row) {
+    if (smart.isLoggedIn) {
+      if (row.serverLine == null) return
+      await (server as any).removeItemByLine.mutateAsync(row.serverLine)
+    } else {
+      smart.remove(row.productId)
+    }
+  }
+
+  // ──────────────────────────────── apply option (라인 PUT만 사용)
+  async function applyOption(row: Row, editKey: string) {
+    const edit = editing[editKey]
     if (!edit || edit.vIdx == null || !edit.sizeName) return
 
-    // 제품 옵션 정보 얻기
     const product = products[row.productId]
     const variant = product?.variants?.[edit.vIdx]
     const sizeObj = variant?.sizes?.find(s => s.name === edit.sizeName)
+
     const opt = {
       variantIndex: edit.vIdx,
       color: variant?.color,
@@ -175,52 +215,48 @@ export default function CartPage() {
 
     try {
       if (smart.isLoggedIn) {
-        // 1) useCartSmart에 메서드가 있으면 사용
-        const maybeUpdate = (smart as any).updateOption
-        if (typeof maybeUpdate === 'function') {
-          await maybeUpdate(row.productId, opt)
-        } else {
-          // 2) 직접 API 폴백 (예시: PUT /api/cart/items/:productId)
-          // 백엔드 라우트에 맞게 바꿔 사용하세요
-          await fetch(`/api/cart/items/${row.productId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ option: opt })
-          })
-            // 서버 스토어 refetch 필요하다면 내부에서 해주거나 수동으로 트리거
-            ; (server as any).refetch?.()
+        if (row.serverLine == null) {
+          alert('라인 정보를 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.')
+          return
         }
+        const r = await fetch(`/api/cart/items/line/${row.serverLine}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ option: opt }),
+        })
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}))
+          alert(`옵션 변경 실패: ${j.error ?? r.status}`)
+          return
+        }
+        server.cart.refetch()
+        cancelEdit(editKey)
       } else {
-        // 게스트 로컬 장바구니 갱신
-        const maybeUpdateGuest = (smart as any).updateGuestOption
-        if (typeof maybeUpdateGuest === 'function') {
-          await maybeUpdateGuest(row.productId, opt)
+        const updateGuest = (smart as any).updateGuestOption
+        if (typeof updateGuest === 'function') {
+          await updateGuest(row.productId, opt)
         } else {
-          // 폴백: 삭제 후 동일 수량으로 다시 담기
+          // 폴백: 제거 후 다시 추가
           smart.remove(row.productId)
-          const maybeAdd = (smart as any).add || (smart as any).addAsync
-          if (typeof maybeAdd === 'function') {
-            await maybeAdd(row.productId, row.qty, opt)
-          } else {
-            // 최후 폴백: setQty가 옵션을 못 받는다면 정보 유실 가능(필요 시 스토어 보완)
-            console.warn('No add/addAsync in useCartSmart; please provide updateGuestOption/add')
-          }
+          const add = (smart as any).addAsync || (smart as any).add
+          if (typeof add === 'function') await add(row.productId, row.qty, opt)
         }
+        cancelEdit(editKey)
       }
-    } finally {
-      cancelEdit(row.productId)
+    } catch (e) {
+      console.error(e)
+      alert('옵션 변경 중 오류가 발생했습니다.')
     }
   }
 
-  // 편집용 옵션 렌더
-  function OptionEditor({ row }: { row: Row }) {
+  // ──────────────────────────────── OptionEditor (라인 키 기반)
+  function OptionEditor({ row, editKey }: { row: Row; editKey: string }) {
     const p = products[row.productId]
     const vList = p?.variants ?? []
-    const edit = editing[row.productId] ?? { vIdx: null, sizeName: null }
+    const edit = editing[editKey] ?? { vIdx: null, sizeName: null }
     const currentSizes = (edit.vIdx != null ? vList[edit.vIdx]?.sizes : []) ?? []
 
-    // 색상 버튼에서 “총 재고” (모든 사이즈 stock 합)
     const totalStock = (v: any) =>
       (v?.sizes ?? []).reduce((n: number, s: any) => n + (typeof s?.stock === 'number' ? s.stock : 0), 0)
 
@@ -237,7 +273,7 @@ export default function CartPage() {
                 key={`${v.color}-${i}`}
                 type="button"
                 disabled={disabled}
-                onClick={() => setEditColor(row.productId, i)}
+                onClick={() => setEditColor(row, i)}
                 className={[
                   'px-3 py-2 rounded-lg border text-sm',
                   disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white',
@@ -267,7 +303,7 @@ export default function CartPage() {
                 key={s.name}
                 type="button"
                 disabled={disabled}
-                onClick={() => setEditSize(row.productId, s.name)}
+                onClick={() => setEditSize(row, s.name)}
                 className={[
                   'px-3 py-2 rounded-lg border text-sm',
                   disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white',
@@ -282,16 +318,11 @@ export default function CartPage() {
         </div>
 
         <div className="mt-3 flex gap-2">
-          <button
-            className="px-4 py-2 rounded-lg border hover:bg-white"
-            onClick={() => cancelEdit(row.productId)}
-          >
-            취소
-          </button>
+          <button className="px-4 py-2 rounded-lg border hover:bg-white" onClick={() => cancelEdit(editKey)}>취소</button>
           <button
             className="px-4 py-2 rounded-lg bg-black text-white disabled:opacity-50"
             disabled={!(edit.vIdx != null && edit.sizeName)}
-            onClick={() => applyOption(row)}
+            onClick={() => applyOption(row, editKey)}
           >
             옵션 적용
           </button>
@@ -300,8 +331,14 @@ export default function CartPage() {
     )
   }
 
+  // ──────────────────────────────── render
   if (smart.isLoggedIn && server.cart.isLoading) {
-    return <div className="container-max py-10">불러오는 중…</div>
+    return (
+      <div className="min-h-screen bg-white text-[#222]">
+        <Nav />
+        <div className="container-max py-10">불러오는 중…</div>
+      </div>
+    )
   }
 
   return (
@@ -318,10 +355,11 @@ export default function CartPage() {
           <>
             <ul className="divide-y">
               {rows.map((it) => {
-                const isEditing = !!editing[it.productId]
-                const p = products[it.productId] // 게스트일 때만 존재(서버는 옵션 바꾸려면 개별 fetch 필요 시 확장)
+                const k = lineKey(it, smart.isLoggedIn)
+                const isEditing = !!editing[k]
+                const hasProduct = !!products[it.productId]
                 return (
-                  <li key={it.productId} className="py-4">
+                  <li key={k} className="py-4">
                     <div className="flex items-center gap-4">
                       <img
                         src={it.images?.[0] || 'https://via.placeholder.com/80x80?text=No+Image'}
@@ -330,9 +368,8 @@ export default function CartPage() {
                       />
                       <div className="flex-1">
                         <div className="font-medium">{it.name}</div>
-                        <div className="text-sm text-gray-600">{it.price.toLocaleString()}원</div>
+                        <div className="text-sm text-gray-600">{(it.price || 0).toLocaleString()}원</div>
 
-                        {/* 선택된 옵션 표시 */}
                         {(it.color || it.size) && (
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                             {it.color && (
@@ -349,10 +386,9 @@ export default function CartPage() {
                                 {it.size}
                               </span>
                             )}
-                            {/* 옵션 변경 버튼 (게스트는 바로, 서버는 제품 상세 미로딩 시 버튼 비활성화) */}
                             <button
                               className="ml-1 underline text-gray-700 disabled:text-gray-400"
-                              disabled={!p && !smart.isLoggedIn /* 서버는 개별 제품 옵션 정보 없으면 비활성화(필요시 fetch 확장) */}
+                              disabled={!hasProduct && !smart.isLoggedIn}
                               onClick={() => startEdit(it)}
                             >
                               옵션 변경
@@ -362,19 +398,17 @@ export default function CartPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <button className="px-2 border rounded"
-                          onClick={() => smart.setQty(it.productId, Math.max(1, it.qty - 1))}>-</button>
+                        <button className="px-2 border rounded" onClick={() => changeQty(it, Math.max(1, it.qty - 1))}>-</button>
                         <span className="w-8 text-center">{it.qty}</span>
-                        <button className="px-2 border rounded"
-                          onClick={() => smart.setQty(it.productId, it.qty + 1)}>+</button>
+                        <button className="px-2 border rounded" onClick={() => changeQty(it, it.qty + 1)}>+</button>
                       </div>
-                      <div className="w-28 text-right">{it.line.toLocaleString()}원</div>
-                      <button className="ml-4 text-sm text-red-600"
-                        onClick={() => smart.remove(it.productId)}>삭제</button>
+
+                      <div className="w-28 text-right">{(it.linePrice || 0).toLocaleString()}원</div>
+
+                      <button className="ml-4 text-sm text-red-600" onClick={() => removeRow(it)}>삭제</button>
                     </div>
 
-                    {/* 옵션 편집 영역 */}
-                    {isEditing && <OptionEditor row={it} />}
+                    {isEditing && <OptionEditor row={it} editKey={k} />}
                   </li>
                 )
               })}
@@ -387,8 +421,8 @@ export default function CartPage() {
                 </div>
               )}
               <div className="text-right ml-auto">
-                <div>총 수량: <b>{totalQty}</b>개</div>
-                <div className="text-xl font-semibold">결제금액: {totalPrice.toLocaleString()}원</div>
+                <div>총 수량: <b>{(totalQty || 0)}</b>개</div>
+                <div className="text-xl font-semibold">결제금액: {(totalPrice || 0).toLocaleString()}원</div>
                 <button className="mt-3 px-6 py-3 rounded-xl bg-black text-white" disabled={!smart.isLoggedIn}>
                   {smart.isLoggedIn ? '결제하기(추가 구현)' : '로그인 후 결제'}
                 </button>

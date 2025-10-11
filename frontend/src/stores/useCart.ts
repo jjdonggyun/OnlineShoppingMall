@@ -1,4 +1,4 @@
-// src/stores/useCart.ts (또는 hooks/useCart.ts)
+// src/stores/useCart.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 export type CartItem = {
@@ -7,14 +7,19 @@ export type CartItem = {
   price: number
   images: string[]
   qty: number
+  /** 서버가 내려주는 '라인 인덱스'(UI 제어용) */
   line: number
+  /** 소계 금액 = price * qty (렌더링은 이걸 사용) */
+  linePrice?: number
 
+  // 옵션(로그인/게스트 공통 표시용)
   variantIndex?: number
   color?: string
   colorHex?: string
   size?: string
   sku?: string
 }
+
 export type Cart = {
   id: string
   items: CartItem[]
@@ -40,7 +45,6 @@ export function useCart() {
       if (!r.ok) throw new Error('UNAUTHORIZED')
       return r.json()
     },
-    // 로그인 안돼 있으면 자동 실패할 수 있으니, 필요시 enabled 옵션으로 로그인 상태에 따라 호출 제어 가능
   })
 
   const addItem = useMutation({
@@ -49,7 +53,7 @@ export function useCart() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(payload), // option도 함께 전송(백엔드가 받도록 구현하면 반영됨)
+        body: JSON.stringify(payload),
       })
       if (!r.ok) throw new Error('ADD_FAIL')
       return r.json() as Promise<Cart>
@@ -57,6 +61,7 @@ export function useCart() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cart'] }),
   })
 
+  /** 하위호환: productId의 '첫 매칭 라인'만 수정됨(옵션 라인 여러 개면 모호) */
   const updateQty = useMutation({
     mutationFn: async (payload: { productId: string; qty: number }) => {
       const r = await fetch(`/api/cart/items/${payload.productId}`, {
@@ -71,9 +76,38 @@ export function useCart() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cart'] }),
   })
 
+  // ✅ line 기준 수정
+  const updateQtyByLine = useMutation({
+    mutationFn: async (payload: { line: number; qty: number }) => {
+      const r = await fetch(`/api/cart/items/line/${payload.line}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ qty: payload.qty }),
+      })
+      if (!r.ok) throw new Error('PATCH_FAIL')
+      return r.json() as Promise<Cart>
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cart'] }),
+  })
+
+  /** 하위호환: 해당 product의 모든 라인 삭제 */
   const removeItem = useMutation({
     mutationFn: async (productId: string) => {
       const r = await fetch(`/api/cart/items/${productId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (!r.ok) throw new Error('DELETE_FAIL')
+      return r.json() as Promise<Cart>
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cart'] }),
+  })
+
+  // ✅ line 기준 삭제
+  const removeItemByLine = useMutation({
+    mutationFn: async (line: number) => {
+      const r = await fetch(`/api/cart/items/line/${line}`, {
         method: 'DELETE',
         credentials: 'include',
       })
@@ -95,5 +129,5 @@ export function useCart() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cart'] }),
   })
 
-  return { cart, addItem, updateQty, removeItem, clear }
+  return { cart, addItem, updateQty, updateQtyByLine, removeItem, removeItemByLine, clear }
 }

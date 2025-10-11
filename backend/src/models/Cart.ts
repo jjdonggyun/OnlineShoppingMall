@@ -1,12 +1,18 @@
-// 유저별로 1개의 카트 문서만 유지
-// 아이템은 (product, qty) 구조
-// 응답 계산 시 populate로 상품 정보를 합쳐 총액 계산
-
+// models/Cart.ts
 import { Schema, model, Types, Document } from 'mongoose'
+
+export interface ICartItemOption {
+  variantIndex?: number
+  color?: string
+  colorHex?: string
+  size?: string
+  sku?: string
+}
 
 export interface ICartItem {
   product: Types.ObjectId
   qty: number
+  option?: ICartItemOption   // ✅ 추가
 }
 
 export interface ICart extends Document {
@@ -16,9 +22,18 @@ export interface ICart extends Document {
   updatedAt: Date
 }
 
+const optionSchema = new Schema<ICartItemOption>({
+  variantIndex: Number,
+  color: String,
+  colorHex: String,
+  size: String,
+  sku: String,
+}, { _id: false })
+
 const cartItemSchema = new Schema<ICartItem>({
   product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
   qty: { type: Number, required: true, min: 1 },
+  option: { type: optionSchema, default: undefined }, // ✅ 추가
 })
 
 const cartSchema = new Schema<ICart>({

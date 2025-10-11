@@ -25,6 +25,7 @@ import MyPage from './pages/MyPage'
 import AdminProducts from './pages/AdminProducts'
 import ProductsPage from './pages/ProductsPage'
 import AdminHashtags from './pages/AdminHashtags'
+import Wishlist from './pages/Wishlist'
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -58,6 +59,7 @@ const router = createBrowserRouter([
   // { path: '/products', element: <ProductList /> },
   { path: '/products', element: <ProductsPage  /> },
   { path: '/admin/hashtags', element: <AdminHashtags  /> },
+  { path: '/wishlist', element: <Wishlist /> },
 ])
 
 // ★★★ 렌더 전에 게스트 카트 1회 로드 (Hook이 아님: getState()는 안전)

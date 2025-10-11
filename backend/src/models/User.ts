@@ -1,12 +1,11 @@
-import { Schema, model, Document } from 'mongoose'
+// models/User.ts
+import { Schema, model, Document, Types } from 'mongoose'
 
 export interface IUser extends Document {
   email: string
   passwordHash: string
   role: 'USER' | 'ADMIN'
   tokenVersion: number
-
-  // 프로필
   name: string
   userId: string
   phone: string
@@ -14,6 +13,9 @@ export interface IUser extends Document {
   smsOptIn: boolean
   emailOptIn: boolean
   recommenderId?: string | null
+
+  // ★ 추가
+  wishlist: Types.ObjectId[]
 }
 
 const userSchema = new Schema<IUser>({
@@ -21,7 +23,6 @@ const userSchema = new Schema<IUser>({
   passwordHash: { type: String, required: true },
   role: { type: String, enum: ['USER','ADMIN'], default: 'USER', index: true },
   tokenVersion: { type: Number, default: 0 },
-
   name: { type: String, required: true, trim: true },
   userId: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
   phone: { type: String, required: true, trim: true },
@@ -29,6 +30,9 @@ const userSchema = new Schema<IUser>({
   smsOptIn: { type: Boolean, default: true },
   emailOptIn: { type: Boolean, default: true },
   recommenderId: { type: String, default: null, trim: true },
+
+  // ★ 추가
+  wishlist: { type: [Schema.Types.ObjectId], ref: 'Product', default: [], index: true },
 }, { timestamps: true })
 
 export default model<IUser>('User', userSchema)

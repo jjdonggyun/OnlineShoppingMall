@@ -6,6 +6,7 @@ import Nav from '../components/Nav'
 import { useAuth } from '../stores/auth'
 import { useCartSmart } from '../stores/useCartSmart'
 import type { Product, Variant, VariantSize } from '../types/product'
+import WishButton from '../components/WishButton'
 
 /** 간단 태그 사전 훅: /api/hashtags?type=TAG → { [value]: {label, emoji} } */
 function useTagDict() {
@@ -22,7 +23,7 @@ function useTagDict() {
         for (const h of list) d[h.value] = { label: h.label, emoji: h.emoji ?? null }
         setDict(d)
       } catch {
-        // noop
+        /* noop */
       }
     })()
     return () => { alive = false }
@@ -45,7 +46,7 @@ export default function ProductDetail() {
   const { user } = useAuth(s => ({ user: s.user }))
   const cart = useCartSmart()
 
-  // 1) 데이터 로드 훅 (항상 호출)
+  // ✅ 훅: 항상 같은 순서/개수로 호출되도록 최상단에 배치
   const { data } = useQuery<Product>({
     queryKey: ['product', id],
     queryFn: async () => {
@@ -56,7 +57,6 @@ export default function ProductDetail() {
     enabled: !!id
   })
 
-  // 2) 모든 훅은 조건문 밖(항상 호출)
   const [idx, setIdx] = useState(0)
   useEffect(() => { setIdx(0) }, [id])
 
@@ -65,7 +65,7 @@ export default function ProductDetail() {
   const [sizeName, setSizeName] = useState<string | null>(null)
   useEffect(() => { setSizeName(null) }, [vIdx]) // 색상 바꾸면 사이즈 초기화
 
-  // 데이터 의존 메모
+  // 데이터 파생
   const variants: Variant[] = useMemo(
     () => data?.variants ?? [],
     [data?.variants]
@@ -89,31 +89,39 @@ export default function ProductDetail() {
   )
   const currentSizes: VariantSize[] = currentVariant?.sizes ?? []
 
-  // ===== 장바구니 담기 =====
+  // 태그 매핑(훅은 여기서 호출)
+  const tagDict = useTagDict()
+  const viewTags = useMemo(
+    () => (data?.tags ?? []).map(v => tagDict[v]?.label ?? v),
+    [data?.tags, tagDict]
+  )
+
+  // 장바구니/토스트 상태
   const [adding, setAdding] = useState(false)
   const [toast, setToast] = useState<null | { type: 'ok' | 'err'; msg: string }>(null)
 
-  // 3) 데이터 아직 없으면 표시만
-  if (!data) return (
-    <div className="min-h-screen bg-white text-[#222]">
-      <Nav />
-      <div className="container-max py-20">로딩중...</div>
-    </div>
-  )
-  const d = data
+  // ❗ UI 분기를 위해 early return을 쓰되, 이미 모든 훅을 위에서 호출했으므로 안전
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-white text-[#222]">
+        <Nav />
+        <div className="container-max py-20">로딩중...</div>
+      </div>
+    )
+  }
 
-  // 파생값들
+  const d = data
   const imgs = d.images?.length ? d.images : ['https://via.placeholder.com/600x800?text=No+Image']
 
   function prev() { setIdx(i => (i - 1 + imgs.length) % imgs.length) }
   function next() { setIdx(i => (i + 1) % imgs.length) }
   function go(n: number) { setIdx(n) }
 
-  // 색상/사이즈 선택 가능 여부
+  // 담기 가능 조건
   const canAdd =
     (variants.length === 0) || (vIdx != null && !!sizeName)
 
-  // 색상 버튼에서 재고 여부(해당 색상의 모든 사이즈 합)
+  // 색상 총 재고(해당 색상 사이즈 합)
   const variantTotalStock = (v: Variant) =>
     (v.sizes ?? []).reduce((sum, s) => sum + (typeof s.stock === 'number' ? s.stock : 0), 0)
 
@@ -127,7 +135,7 @@ export default function ProductDetail() {
       setAdding(true)
       const opt = variants.length
         ? {
-            variantIndex: vIdx!,
+            variantIndex: vIdx!, // 선택된 변형 인덱스
             color: currentVariant?.color,
             colorHex: currentVariant?.colorHex,
             size: sizeName!,
@@ -143,13 +151,6 @@ export default function ProductDetail() {
       setTimeout(() => setToast(null), 1400)
     }
   }
-
-  // 태그 표시용: value → label 매핑
-  const tagDict = useTagDict()
-  const viewTags = useMemo(
-    () => (d.tags ?? []).map(v => tagDict[v]?.label ?? v),
-    [d.tags, tagDict]
-  )
 
   return (
     <div className="min-h-screen bg-white text-[#222]">
@@ -185,7 +186,7 @@ export default function ProductDetail() {
           <div className="text-xs text-gray-500">{d.productNo}</div>
           <h1 className="text-2xl font-bold">{d.name}</h1>
 
-          {/* ✅ 배지 대신 TAG 뱃지들 */}
+          {/* TAG 뱃지들 */}
           {(viewTags.length > 0) && (
             <div className="mt-2 flex flex-wrap gap-1">
               {viewTags.map((t, i) => <TagBadge key={i} text={`#${t}`} />)}
@@ -212,7 +213,7 @@ export default function ProductDetail() {
             <p className="mt-4 text-gray-700 leading-relaxed">{d.description}</p>
           )}
 
-          {/* ===== 색상 선택: 사이즈와 동일한 버튼 UI ===== */}
+          {/* 색상 선택 */}
           {variants.length > 0 && (
             <div className="mt-6 space-y-3">
               <div className="text-sm text-gray-700">
@@ -244,7 +245,6 @@ export default function ProductDetail() {
                       ].join(' ')}
                       title={disabled ? '재고 없음' : undefined}
                     >
-                      {/* 작은 칩 형태로 실색상 미리보기 + 이름 */}
                       <span
                         className="inline-block w-3.5 h-3.5 rounded-full border border-black/10 align-[-1px] mr-2"
                         style={{ backgroundColor: v.colorHex || '#999999' }}
@@ -258,7 +258,7 @@ export default function ProductDetail() {
             </div>
           )}
 
-          {/* ===== 사이즈 선택 ===== */}
+          {/* 사이즈 선택 */}
           {variants.length > 0 && (
             <div className="mt-6 space-y-3">
               <div className="text-sm text-gray-700">사이즈</div>
@@ -290,6 +290,8 @@ export default function ProductDetail() {
             </div>
           )}
 
+
+          <WishButton productId={d.id} className="border w-12 h-12 rounded-xl flex items-center justify-center hover:bg-gray-50" />
           {/* 담기 버튼 */}
           <button
             className={`mt-6 px-6 py-3 rounded-xl text-white ${adding ? 'bg-gray-600' : 'bg-black'} ${(!canAdd ? 'opacity-60' : '')}`}
