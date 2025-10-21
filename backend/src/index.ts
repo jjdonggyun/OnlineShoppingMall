@@ -15,6 +15,7 @@ import bannersRouter from './routes/banners'
 import collectionsRouter from './routes/collections'
 import hashtags from './routes/hashtags'
 import wishlistRouter from './routes/wishlist'
+import orderRouter from './routes/orders'
 
 const app = express()
 
@@ -42,6 +43,7 @@ app.use('/api/banners', bannersRouter)
 app.use('/api/collections', collectionsRouter)
 app.use('/api/hashtags', hashtags)
 app.use('/api/wishlist', wishlistRouter)
+app.use('/api/orders', orderRouter)
 
 const port = process.env.PORT || 4000
 const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/shopmall'

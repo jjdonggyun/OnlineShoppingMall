@@ -1,6 +1,5 @@
-// pages/Cart.tsx
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCart } from '../stores/useCart'
 import { useCartSmart } from '../stores/useCartSmart'
 import Nav from '../components/Nav'
@@ -39,15 +38,29 @@ type Row = {
 export default function CartPage() {
   const smart = useCartSmart()
   const server = useCart()
+  const nav = useNavigate()
 
   const [products, setProducts] = useState<PMap>({})
   const [editing, setEditing] = useState<Record<string, { vIdx: number | null; sizeName: string | null }>>({})
+  const [selected, setSelected] = useState<Record<string, boolean>>({})
+
+
+  function toggleSelect(row: Row) {
+    const key = lineKey(row, smart.isLoggedIn)
+    setSelected(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  function isSelected(row: Row) {
+    const k = lineKey(row, smart.isLoggedIn)
+    return !!selected[k]
+  }
+
 
   // ──────────────────────────────── helpers
   function lineKey(row: Row, isLoggedIn: boolean) {
     return isLoggedIn && row.serverLine != null
-      ? `s:${row.serverLine}` // 서버 장바구니는 라인 인덱스로 고유화
-      : `g:${row.productId}:${row.sku ?? row.size ?? row.variantIndex ?? ''}` // 게스트는 옵션 조합으로 구분
+      ? `s:${row.serverLine}`
+      : `g:${row.productId}:${row.sku ?? row.size ?? row.variantIndex ?? ''}`
   }
 
   async function ensureProductLoaded(id: string) {
@@ -66,15 +79,14 @@ export default function CartPage() {
           swatches: p.swatches || [],
         }
       }))
-    } catch {}
+    } catch { }
   }
 
-  // 게스트일 때 미리 상품 상세 로드(가격/이미지/옵션)
   useEffect(() => {
     if (smart.isLoggedIn) return
     const ids = smart.guestItems.map(it => it.productId)
     if (ids.length === 0) { setProducts({}); return }
-    ;(async () => {
+    ; (async () => {
       const entries: [string, PMap[string]][] = []
       for (const id of ids) {
         try {
@@ -88,13 +100,12 @@ export default function CartPage() {
             variants: p.variants || [],
             swatches: p.swatches || [],
           }])
-        } catch {}
+        } catch { }
       }
       setProducts(Object.fromEntries(entries))
     })()
   }, [smart.isLoggedIn, smart.guestItems])
 
-  // 표 렌더용 rows
   const rows: Row[] = useMemo(() => {
     if (smart.isLoggedIn) {
       if (server.cart.isLoading || !server.cart.data) return []
@@ -134,15 +145,9 @@ export default function CartPage() {
     }
   }, [smart.isLoggedIn, server.cart.isLoading, server.cart.data, smart.guestItems, products])
 
-  const totalQty = smart.isLoggedIn
-    ? (server.cart.data?.totalQty ?? rows.reduce((s, r) => s + r.qty, 0))
-    : rows.reduce((s, r) => s + r.qty, 0)
+  const totalQty = rows.reduce((s, r) => s + r.qty, 0)
+  const totalPrice = rows.reduce((s, r) => s + r.linePrice, 0)
 
-  const totalPrice = smart.isLoggedIn
-    ? (server.cart.data?.totalPrice ?? rows.reduce((s, r) => s + r.linePrice, 0))
-    : rows.reduce((s, r) => s + r.linePrice, 0)
-
-  // ──────────────────────────────── edit state ops (라인 키 기준)
   function startEdit(row: Row) {
     void ensureProductLoaded(row.productId)
     const k = lineKey(row, smart.isLoggedIn)
@@ -176,7 +181,6 @@ export default function CartPage() {
     })
   }
 
-  // ──────────────────────────────── qty / remove
   async function changeQty(row: Row, nextQty: number) {
     const q = Math.max(1, nextQty)
     if (smart.isLoggedIn) {
@@ -196,7 +200,6 @@ export default function CartPage() {
     }
   }
 
-  // ──────────────────────────────── apply option (라인 PUT만 사용)
   async function applyOption(row: Row, editKey: string) {
     const edit = editing[editKey]
     if (!edit || edit.vIdx == null || !edit.sizeName) return
@@ -215,10 +218,7 @@ export default function CartPage() {
 
     try {
       if (smart.isLoggedIn) {
-        if (row.serverLine == null) {
-          alert('라인 정보를 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.')
-          return
-        }
+        if (row.serverLine == null) return
         const r = await fetch(`/api/cart/items/line/${row.serverLine}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -234,14 +234,7 @@ export default function CartPage() {
         cancelEdit(editKey)
       } else {
         const updateGuest = (smart as any).updateGuestOption
-        if (typeof updateGuest === 'function') {
-          await updateGuest(row.productId, opt)
-        } else {
-          // 폴백: 제거 후 다시 추가
-          smart.remove(row.productId)
-          const add = (smart as any).addAsync || (smart as any).add
-          if (typeof add === 'function') await add(row.productId, row.qty, opt)
-        }
+        if (typeof updateGuest === 'function') await updateGuest(row.productId, opt)
         cancelEdit(editKey)
       }
     } catch (e) {
@@ -250,23 +243,50 @@ export default function CartPage() {
     }
   }
 
-  // ──────────────────────────────── OptionEditor (라인 키 기반)
+  async function handleBuySelected() {
+    if (!smart.isLoggedIn) {
+      alert('로그인이 필요합니다.')
+      nav('/login')
+      return
+    }
+
+    const selectedLines = rows
+      .filter(r => isSelected(r))
+      .map(r => r.serverLine!)
+      .filter(n => typeof n === 'number')
+
+    if (selectedLines.length === 0) {
+      alert('구매할 상품을 선택해주세요.')
+      return
+    }
+
+    const r = await fetch('/api/orders/from-cart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ lines: selectedLines }),
+    })
+    const j = await r.json()
+    if (!r.ok) {
+      alert('주문 생성 실패: ' + (j.error || r.status))
+      return
+    }
+    server.clear.mutate()
+    nav('/checkout', { state: { orderId: j.id, totalPrice: j.totalPrice } })
+  }
+
   function OptionEditor({ row, editKey }: { row: Row; editKey: string }) {
     const p = products[row.productId]
     const vList = p?.variants ?? []
     const edit = editing[editKey] ?? { vIdx: null, sizeName: null }
     const currentSizes = (edit.vIdx != null ? vList[edit.vIdx]?.sizes : []) ?? []
 
-    const totalStock = (v: any) =>
-      (v?.sizes ?? []).reduce((n: number, s: any) => n + (typeof s?.stock === 'number' ? s.stock : 0), 0)
-
     return (
       <div className="mt-2 border rounded-lg p-3 bg-gray-50">
         <div className="text-sm text-gray-700 mb-1">색상</div>
         <div className="flex flex-wrap gap-2 mb-3">
-          {vList.length === 0 && <span className="text-xs text-gray-500">옵션 없음</span>}
           {vList.map((v, i) => {
-            const disabled = totalStock(v) <= 0
+            const disabled = (v.sizes ?? []).every(s => (s.stock ?? 0) <= 0)
             const active = edit.vIdx === i
             return (
               <button
@@ -279,12 +299,10 @@ export default function CartPage() {
                   disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white',
                   active ? 'ring-2 ring-black' : ''
                 ].join(' ')}
-                title={disabled ? '재고 없음' : undefined}
               >
                 <span
                   className="inline-block w-3.5 h-3.5 rounded-full border border-black/10 align-[-1px] mr-2"
                   style={{ backgroundColor: v.colorHex || '#999999' }}
-                  aria-hidden
                 />
                 {v.color}
               </button>
@@ -293,7 +311,6 @@ export default function CartPage() {
         </div>
 
         <div className="text-sm text-gray-700 mb-1">사이즈</div>
-        {edit.vIdx == null && <div className="text-xs text-rose-600 mb-2">먼저 색상을 선택해주세요.</div>}
         <div className="flex flex-wrap gap-2">
           {(currentSizes ?? []).map(s => {
             const disabled = !s.stock || s.stock <= 0
@@ -309,7 +326,6 @@ export default function CartPage() {
                   disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white',
                   active ? 'ring-2 ring-black' : ''
                 ].join(' ')}
-                title={disabled ? '재고 없음' : undefined}
               >
                 {s.name}{typeof s.stock === 'number' ? ` (${s.stock})` : ''}
               </button>
@@ -331,7 +347,6 @@ export default function CartPage() {
     )
   }
 
-  // ──────────────────────────────── render
   if (smart.isLoggedIn && server.cart.isLoading) {
     return (
       <div className="min-h-screen bg-white text-[#222]">
@@ -360,6 +375,12 @@ export default function CartPage() {
                 const hasProduct = !!products[it.productId]
                 return (
                   <li key={k} className="py-4">
+                    <input
+                      type="checkbox"
+                      checked={isSelected(it)}
+                      onChange={() => toggleSelect(it)}
+                      className="w-4 h-4"
+                    />
                     <div className="flex items-center gap-4">
                       <img
                         src={it.images?.[0] || 'https://via.placeholder.com/80x80?text=No+Image'}
@@ -421,11 +442,23 @@ export default function CartPage() {
                 </div>
               )}
               <div className="text-right ml-auto">
-                <div>총 수량: <b>{(totalQty || 0)}</b>개</div>
-                <div className="text-xl font-semibold">결제금액: {(totalPrice || 0).toLocaleString()}원</div>
-                <button className="mt-3 px-6 py-3 rounded-xl bg-black text-white" disabled={!smart.isLoggedIn}>
-                  {smart.isLoggedIn ? '결제하기(추가 구현)' : '로그인 후 결제'}
-                </button>
+                <div>총 수량: <b>{totalQty}</b>개</div>
+                <div className="text-xl font-semibold">결제금액: {totalPrice.toLocaleString()}원</div>
+                <div className="mt-3 flex gap-3 justify-end">
+                  <button
+                    className="px-6 py-3 rounded-xl bg-gray-700 text-white"
+                    onClick={handleBuySelected}
+                    disabled={!smart.isLoggedIn || rows.length === 0}
+                  >
+                    선택상품 구매
+                  </button>
+                  <button
+                    className="px-6 py-3 rounded-xl bg-black text-white"
+                    disabled={!smart.isLoggedIn}
+                  >
+                    {smart.isLoggedIn ? '결제하기(추가 구현)' : '로그인 후 결제'}
+                  </button>
+                </div>
               </div>
             </div>
           </>
