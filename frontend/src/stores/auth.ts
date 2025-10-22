@@ -4,11 +4,22 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 
 /** 서버 응답 id/_id/uid 무엇이 와도 uid로 통일 */
 export type User = {
+  /** 공통 식별자 */
   uid: string
-  email: string
-  role: 'USER' | 'ADMIN'
   id?: string
   _id?: string
+
+  /** 서버 모델과 동일한 필드 */
+  email: string
+  role: 'USER' | 'ADMIN'
+  name: string
+  userId: string
+  phone: string
+  birth?: string | null              // ISO 문자열로 전달되므로 Date 대신 string 처리
+  smsOptIn: boolean
+  emailOptIn: boolean
+  recommenderId?: string | null
+  wishlist?: string[]                // ObjectId[] → 문자열 배열
 }
 
 type AuthState = {
@@ -39,10 +50,9 @@ export const useAuth = create<AuthState>()(
 
       bootstrap: async () => {
         try {
-          // ✅ 서버 쿠키 기반으로 세션 복원
           const r = await fetch('/api/auth/me', { credentials: 'include' })
           if (!r.ok) { set({ user: undefined }); return }
-          const me = await r.json() // { uid/id/_id, email, role, ... }
+          const me = await r.json()
           const uid = me.uid ?? me.id ?? me._id
           if (!uid) { set({ user: undefined }); return }
           set({ user: { ...me, uid } })
@@ -53,7 +63,7 @@ export const useAuth = create<AuthState>()(
     }),
     {
       name: 'auth-store',
-      storage: createJSONStorage(() => localStorage), // 🚨 배포 시 민감하면 제거/세션스토리지 변경
+      storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({ user: s.user, accessToken: s.accessToken }),
     }
   )

@@ -41,7 +41,11 @@ const orderSchema = new Schema<IOrder>({
   items: [orderItemSchema],
   totalPrice: { type: Number, required: true },
   paymentMethod: { type: String, default: 'CARD' },
-  status: { type: String, enum: ['PENDING', 'PAID', 'CANCELLED'], default: 'PENDING' }
+  status: {
+  type: String,
+  enum: ['PENDING', 'PAID', 'SHIPPING', 'DELIVERED', 'CANCELLED'],
+  default: 'PENDING'
+}
 }, { timestamps: true })
 
 export default model<IOrder>('Order', orderSchema)
