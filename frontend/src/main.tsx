@@ -28,6 +28,8 @@ import AdminHashtags from './pages/AdminHashtags'
 import Wishlist from './pages/Wishlist'
 import CheckoutPage from './pages/Checkout'
 import MyOrders from './pages/MyOrders'
+import AdminOrders from './pages/AdminOrders'
+import AdminOrderDetail from './pages/AdminOrderDetail'
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -64,6 +66,8 @@ const router = createBrowserRouter([
   { path: '/wishlist', element: <Wishlist /> },
   { path: '/checkout', element: <CheckoutPage /> },
   { path: '/mypage/orders', element: <MyOrders /> },
+  { path: '/admin/orders', element: <AdminOrders /> },
+  { path: '/admin/orders/:id', element: <AdminOrderDetail /> },
 ])
 
 // ★★★ 렌더 전에 게스트 카트 1회 로드 (Hook이 아님: getState()는 안전)

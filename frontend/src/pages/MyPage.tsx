@@ -113,7 +113,7 @@ export default function MyPage() {
             내 정보
           </Link>
           <Link
-            to="/orders"
+            to="/mypage/orders"
             className={`pb-2 border-b-2 ${tab === 'orders' ? 'border-black text-black' : 'border-transparent text-gray-500'}`}
           >
             주문조회

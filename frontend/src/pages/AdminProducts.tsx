@@ -119,6 +119,9 @@ export default function AdminProducts() {
                             품절 상품
                         </Link>
                         <Link to="/admin/banners" className="px-4 py-2 rounded-lg border text-sm">배너 관리</Link>
+                        <Link to="/admin/orders" className="px-4 py-2 rounded-lg border text-sm">
+                            주문 관리
+                        </Link>
                     </div>
                 </div>
 

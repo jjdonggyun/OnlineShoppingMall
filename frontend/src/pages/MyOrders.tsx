@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import Nav from '../components/Nav'
-import { Package } from 'lucide-react'
+import { Package, Truck } from 'lucide-react'
 
 export default function MyOrders() {
   const { data, isLoading } = useQuery({
@@ -37,9 +37,33 @@ export default function MyOrders() {
           {data?.map((o: any) => (
             <li key={o.id} className="border rounded-lg p-4 bg-gray-50">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-600">{new Date(o.createdAt).toLocaleDateString()}</span>
+                <span className="text-sm text-gray-600">
+                  {new Date(o.createdAt).toLocaleDateString()}
+                </span>
                 <span className="text-sm font-medium">{o.status}</span>
               </div>
+
+              {/* ✅ 배송 정보 표시 */}
+              {o.shipping?.trackingNumber && (
+                <div className="flex items-center gap-2 mb-3 text-sm text-gray-700">
+                  <Truck size={16} className="text-gray-600" />
+                  <span>
+                    {o.shipping.courierName || o.shipping.courierCode} / 운송장번호: {o.shipping.trackingNumber}
+                  </span>
+                  {/* 택배사 조회 링크 (예: CJ대한통운) */}
+                  {o.shipping.courierCode?.toUpperCase() === 'CJ' && (
+                    <a
+                      href={`https://trace.cjlogistics.com/next/tracking.html?wblNo=${o.shipping.trackingNumber}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 underline ml-2"
+                    >
+                      배송조회
+                    </a>
+                  )}
+                </div>
+              )}
+
               <ul className="divide-y">
                 {o.items.map((it: any, idx: number) => (
                   <li key={idx} className="flex gap-4 py-3">
@@ -60,6 +84,7 @@ export default function MyOrders() {
                   </li>
                 ))}
               </ul>
+
               <div className="text-right text-sm font-semibold mt-2">
                 총 {o.totalPrice.toLocaleString()}원
               </div>
